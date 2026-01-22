@@ -1653,6 +1653,90 @@ Ipv6SortArray = (arr as list) as list =>
     in
         sorted
 
+/*--------------------------------------------
+   IpSortTable
+ ----------------------------------------------
+  Sort a table by IP address or subnet column
+  Handles mixed IPv4 addresses and subnets
+  parameters:
+    table       - table to sort
+    columnName  - (optional) column name or index to sort by, default is first column
+    descending  - (optional) sort descending, default is false (ascending)
+    prefixOrder - (optional) "none", "shortest", or "longest", default is "shortest"
+                    none:    sort by IP address only, ignore prefix length
+                    shortest: sort by IP address, then shortest prefix first (largest subnets)
+                    longest:  sort by IP address, then longest prefix first (smallest subnets)
+  example:
+    IpSortTable(table, "IP", false, "shortest")
+    IpSortTable(table, 0, true)  // sort first column descending, default prefixOrder
+    IpSortTable(table)           // sort by first column ascending, with shortest prefix
+ */
+IpSortTable = (
+    table as table,
+    optional columnName as any,
+    optional descending as logical,
+    optional prefixOrder as text
+) as table =>
+    let
+        // Determine column to sort by
+        colName = if columnName is null then
+                    Table.ColumnNames(table){0}
+                  else if Type.Is(columnName, type number) then
+                    Table.ColumnNames(table){columnName}
+                  else
+                    columnName,
+
+        // Set defaults
+        desc = if descending is null then false else descending,
+        prefixOrd = if prefixOrder is null or prefixOrder = "" then "shortest" else prefixOrder,
+        validPrefixOrders = {"none", "shortest", "longest"},
+        prefixOrdValid = if List.Contains(validPrefixOrders, prefixOrd) then prefixOrd else "shortest",
+
+        // Parse IP/subnet and add temporary columns
+        withParsed = Table.AddColumn(
+            table,
+            "_Parsed",
+            each try _ParseIpNet(Record.Field(_, colName)) otherwise null
+        ),
+
+        withIpKey = Table.AddColumn(
+            withParsed,
+            "_IpKey",
+            each if [_Parsed] = null then null else _IpToNbr([_Parsed][Ip])
+        ),
+
+        withPrefixKey = Table.AddColumn(
+            withPrefixKey,
+            "_PrefixKey",
+            each if [_Parsed] = null then null else [_Parsed][Len]
+        ),
+
+        // Handle nulls (empty cells and invalid entries go to end)
+        sorted = if prefixOrdValid = "none" then
+            Table.Sort(
+                withPrefixKey,
+                {
+                    each Record.Field(_, colName) = null or Record.Field(_, colName) = "", Order.Ascending,
+                    each [_Parsed] = null, Order.Ascending,
+                    {_IpKey, if desc then Order.Descending else Order.Ascending}
+                }
+            )
+        else
+            Table.Sort(
+                withPrefixKey,
+                {
+                    each Record.Field(_, colName) = null or Record.Field(_, colName) = "", Order.Ascending,
+                    each [_Parsed] = null, Order.Ascending,
+                    {_IpKey, if desc then Order.Descending else Order.Ascending},
+                    {_PrefixKey, if prefixOrdValid = "longest" then Order.Descending else Order.Ascending}
+                }
+            ),
+
+        // Remove temporary columns
+        result = Table.RemoveColumns(sorted, {"_Parsed", "_IpKey", "_PrefixKey"})
+    in
+        result,
+
 in
 [
     IpIsValid = IpIsValid,
@@ -1687,6 +1771,7 @@ in
     IpSubtractSubnets = IpSubtractSubnets,
     IpCommonSubnets = IpCommonSubnets,
     IpMergeOnSubnet = IpMergeOnSubnet,
+    IpSortTable = IpSortTable,
     Ipv6MaskLen = Ipv6MaskLen,
     Ipv6WithoutMask = Ipv6WithoutMask,
     Ipv6IsValid = Ipv6IsValid,
