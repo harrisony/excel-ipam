@@ -682,7 +682,12 @@ IpSortArray = (arr as list) as list =>
         // Sort by converting to numbers
         sorted = List.Sort(
             filtered,
-            (a, b) => Number.Compare(IpStrToNbr(a), IpStrToNbr(b))
+            (a, b) =>
+                let
+                    aNbr = IpStrToNbr(a),
+                    bNbr = IpStrToNbr(b)
+                in
+                    if aNbr < bNbr then -1 else if aNbr > bNbr then 1 else 0
         )
     in
         sorted,
