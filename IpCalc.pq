@@ -1,5 +1,4 @@
-section IpCalc;
-
+let
 //==============================================
 //   Internal Helper Functions
 //==============================================
@@ -16,7 +15,7 @@ _IpToNbr = (bytes as list) as number =>
         bytes,
         0,
         (state, current) => state * 256 + current
-    );
+    ),
 
 /*--------------------------------------------
    _IpFromNbr
@@ -37,7 +36,7 @@ _IpFromNbr = (nbr as number) as list =>
             each [result]
         )
     in
-        Generate{List.Count(Generate) - 1};
+        Generate{List.Count(Generate) - 1},
 
 /*--------------------------------------------
    _IpAnd
@@ -48,7 +47,7 @@ _IpAnd = (ip1 as list, ip2 as list) as list =>
     List.Transform(
         {0..3},
         each Number.BitwiseAnd(ip1{_}, ip2{_})
-    );
+    ),
 
 /*--------------------------------------------
    _IpOr
@@ -59,7 +58,7 @@ _IpOr = (ip1 as list, ip2 as list) as list =>
     List.Transform(
         {0..3},
         each Number.BitwiseOr(ip1{_}, ip2{_})
-    );
+    ),
 
 /*--------------------------------------------
    _IpXor
@@ -70,7 +69,7 @@ _IpXor = (ip1 as list, ip2 as list) as list =>
     List.Transform(
         {0..3},
         each Number.BitwiseXor(ip1{_}, ip2{_})
-    );
+    ),
 
 /*--------------------------------------------
    _IpLenToMask
@@ -86,7 +85,7 @@ _IpLenToMask = (len as number) as list =>
             32 - len
         )
     in
-        _IpFromNbr(maskNbr);
+        _IpFromNbr(maskNbr),
 
 /*--------------------------------------------
    _ParseIpNet
@@ -152,7 +151,7 @@ _ParseIpNet = (s as text) as record =>
         // Clear host bits
         clearedIp = _IpAnd(ipBytes, mask)
     in
-        parsed & [Ip = clearedIp, Mask = mask];
+        parsed & [Ip = clearedIp, Mask = mask],
 
 /*--------------------------------------------
    _IpNetToString
@@ -174,7 +173,7 @@ _IpNetToString = (net as record) as text =>
                 "."
             )
     in
-        ipText & maskPart;
+        ipText & maskPart,
 
 /*--------------------------------------------
    _CompareIpNet
@@ -186,7 +185,7 @@ _CompareIpNet = (a as record, b as record) as number =>
     let
         diff = _IpToNbr(a[Ip]) - _IpToNbr(b[Ip])
     in
-        if diff <> 0 then diff else a[Len] - b[Len];
+        if diff <> 0 then diff else a[Len] - b[Len],
 
 //==============================================
 //   IPv4 Public Functions
@@ -202,7 +201,7 @@ _CompareIpNet = (a as record, b as record) as number =>
    IpIsValid("192.168.001.1") returns false (leading zero)
    IpIsValid("192.168.1") returns false (missing octet)
 */
-shared IpIsValid = (ip as text) as logical =>
+IpIsValid = (ip as text) as logical =>
     try
         let
             parts = Text.Split(ip, "."),
@@ -211,7 +210,7 @@ shared IpIsValid = (ip as text) as logical =>
         in
             hasCorrectCount and roundtrip = ip
     otherwise
-        false;
+        false,
 
 /*--------------------------------------------
    IpStrToNbr
@@ -220,14 +219,14 @@ shared IpIsValid = (ip as text) as logical =>
  example:
    IpStrToNbr("1.2.3.4") returns 16909060
 */
-shared IpStrToNbr = (ip as text) as number =>
+IpStrToNbr = (ip as text) as number =>
     let
         bytes = List.Transform(
             Text.Split(ip, "."),
             Number.FromText
         )
     in
-        _IpToNbr(bytes);
+        _IpToNbr(bytes),
 
 /*--------------------------------------------
    IpBinToStr
@@ -236,14 +235,14 @@ shared IpStrToNbr = (ip as text) as number =>
  example:
    IpBinToStr(16909060) returns "1.2.3.4"
 */
-shared IpBinToStr = (nbr as number) as text =>
+IpBinToStr = (nbr as number) as text =>
     let
         bytes = _IpFromNbr(nbr)
     in
         Text.Combine(
             List.Transform(bytes, Number.ToText),
             "."
-        );
+        ),
 
 /*--------------------------------------------
    IpAnd
@@ -252,13 +251,13 @@ shared IpBinToStr = (nbr as number) as text =>
  example:
    IpAnd("192.168.1.1", "255.255.255.0") returns "192.168.1.0"
 */
-shared IpAnd = (ip1 as text, ip2 as text) as text =>
+IpAnd = (ip1 as text, ip2 as text) as text =>
     let
         bytes1 = List.Transform(Text.Split(ip1, "."), Number.FromText),
         bytes2 = List.Transform(Text.Split(ip2, "."), Number.FromText),
         result = _IpAnd(bytes1, bytes2)
     in
-        Text.Combine(List.Transform(result, Number.ToText), ".");
+        Text.Combine(List.Transform(result, Number.ToText), "."),
 
 /*--------------------------------------------
    IpOr
@@ -267,13 +266,13 @@ shared IpAnd = (ip1 as text, ip2 as text) as text =>
  example:
    IpOr("192.168.1.1", "0.0.0.255") returns "192.168.1.255"
 */
-shared IpOr = (ip1 as text, ip2 as text) as text =>
+IpOr = (ip1 as text, ip2 as text) as text =>
     let
         bytes1 = List.Transform(Text.Split(ip1, "."), Number.FromText),
         bytes2 = List.Transform(Text.Split(ip2, "."), Number.FromText),
         result = _IpOr(bytes1, bytes2)
     in
-        Text.Combine(List.Transform(result, Number.ToText), ".");
+        Text.Combine(List.Transform(result, Number.ToText), "."),
 
 /*--------------------------------------------
    IpXor
@@ -282,13 +281,13 @@ shared IpOr = (ip1 as text, ip2 as text) as text =>
  example:
    IpXor("192.168.1.1", "0.0.0.255") returns "192.168.1.254"
 */
-shared IpXor = (ip1 as text, ip2 as text) as text =>
+IpXor = (ip1 as text, ip2 as text) as text =>
     let
         bytes1 = List.Transform(Text.Split(ip1, "."), Number.FromText),
         bytes2 = List.Transform(Text.Split(ip2, "."), Number.FromText),
         result = _IpXor(bytes1, bytes2)
     in
-        Text.Combine(List.Transform(result, Number.ToText), ".");
+        Text.Combine(List.Transform(result, Number.ToText), "."),
 
 /*--------------------------------------------
    IpWithoutMask
@@ -298,7 +297,7 @@ shared IpXor = (ip1 as text, ip2 as text) as text =>
    IpWithoutMask("192.168.1.0/24") returns "192.168.1.0"
    IpWithoutMask("192.168.1.0 255.255.255.0") returns "192.168.1.0"
 */
-shared IpWithoutMask = (s as text) as text =>
+IpWithoutMask = (s as text) as text =>
     let
         slashPos = Text.PositionOf(s, "/"),
         spacePos = Text.PositionOf(s, " "),
@@ -309,7 +308,7 @@ shared IpWithoutMask = (s as text) as text =>
         else
             s
     in
-        result;
+        result,
 
 /*--------------------------------------------
    IpSubnetLen
@@ -320,11 +319,11 @@ shared IpWithoutMask = (s as text) as text =>
    IpSubnetLen("192.168.1.1 255.255.255.0") returns 24
    IpSubnetLen("192.168.1.1") returns 32
 */
-shared IpSubnetLen = (s as text) as number =>
+IpSubnetLen = (s as text) as number =>
     let
         net = _ParseIpNet(s)
     in
-        net[Len];
+        net[Len],
 
 /*--------------------------------------------
    IpMask
@@ -335,7 +334,7 @@ shared IpSubnetLen = (s as text) as number =>
    IpMask("192.168.1.1/24") returns "255.255.255.0"
    IpMask("192.168.1.1 255.255.255.0") returns "255.255.255.0"
 */
-shared IpMask = (s as text) as text =>
+IpMask = (s as text) as text =>
     let
         net = _ParseIpNet(s),
         maskText = Text.Combine(
@@ -343,7 +342,7 @@ shared IpMask = (s as text) as text =>
             "."
         )
     in
-        maskText;
+        maskText,
 
 /*--------------------------------------------
    IpWildMask
@@ -354,13 +353,13 @@ shared IpMask = (s as text) as text =>
    IpWildMask("192.168.1.1/24") returns "0.0.0.255"
    IpWildMask("192.168.1.1 255.255.255.0") returns "0.0.0.255"
 */
-shared IpWildMask = (s as text) as text =>
+IpWildMask = (s as text) as text =>
     let
         net = _ParseIpNet(s),
         wildNbr = Number.Power(2, 32 - net[Len]) - 1,
         wildBytes = _IpFromNbr(wildNbr)
     in
-        Text.Combine(List.Transform(wildBytes, Number.ToText), ".");
+        Text.Combine(List.Transform(wildBytes, Number.ToText), "."),
 
 /*--------------------------------------------
    IpInvertMask
@@ -371,12 +370,12 @@ shared IpWildMask = (s as text) as text =>
    IpInvertMask("255.255.255.0") returns "0.0.0.255"
    IpInvertMask("0.0.0.255") returns "255.255.255.0"
 */
-shared IpInvertMask = (mask as text) as text =>
+IpInvertMask = (mask as text) as text =>
     let
         maskNbr = IpStrToNbr(mask),
         invertedNbr = Number.Power(2, 32) - 1 - maskNbr
     in
-        IpBinToStr(invertedNbr);
+        IpBinToStr(invertedNbr),
 
 /*--------------------------------------------
    IpMaskLen
@@ -385,7 +384,7 @@ shared IpInvertMask = (mask as text) as text =>
  example:
    IpMaskLen("255.255.255.0") returns 24
 */
-shared IpMaskLen = (mask as text) as number =>
+IpMaskLen = (mask as text) as number =>
     let
         maskNbr = IpStrToNbr(mask),
         notMask = Number.Power(2, 32) - 1 - maskNbr,
@@ -404,7 +403,7 @@ shared IpMaskLen = (mask as text) as number =>
                     state
         )
     in
-        32 - CountZeros[count];
+        32 - CountZeros[count],
 
 /*--------------------------------------------
    IpAdd
@@ -414,8 +413,8 @@ shared IpMaskLen = (mask as text) as number =>
    IpAdd("192.168.1.1", 4) returns "192.168.1.5"
    IpAdd("192.168.1.1", 256) returns "192.168.2.1"
 */
-shared IpAdd = (ip as text, offset as number) as text =>
-    IpBinToStr(IpStrToNbr(ip) + offset);
+IpAdd = (ip as text, offset as number) as text =>
+    IpBinToStr(IpStrToNbr(ip) + offset),
 
 /*--------------------------------------------
    IpDiff
@@ -424,8 +423,8 @@ shared IpAdd = (ip as text, offset as number) as text =>
  example:
    IpDiff("192.168.1.7", "192.168.1.1") returns 6
 */
-shared IpDiff = (ip1 as text, ip2 as text) as number =>
-    IpStrToNbr(ip1) - IpStrToNbr(ip2);
+IpDiff = (ip1 as text, ip2 as text) as number =>
+    IpStrToNbr(ip1) - IpStrToNbr(ip2),
 
 /*--------------------------------------------
    IpGetByte
@@ -435,11 +434,11 @@ shared IpDiff = (ip1 as text, ip2 as text) as number =>
    IpGetByte("192.168.1.1", 1) returns 192
    IpGetByte("192.168.1.1", 4) returns 1
 */
-shared IpGetByte = (ip as text, pos as number) as number =>
+IpGetByte = (ip as text, pos as number) as number =>
     let
         bytes = List.Transform(Text.Split(ip, "."), Number.FromText)
     in
-        bytes{pos - 1};
+        bytes{pos - 1},
 
 /*--------------------------------------------
    IpSetByte
@@ -448,12 +447,12 @@ shared IpGetByte = (ip as text, pos as number) as number =>
  example:
    IpSetByte("192.168.1.1", 4, 20) returns "192.168.1.20"
 */
-shared IpSetByte = (ip as text, pos as number, newvalue as number) as text =>
+IpSetByte = (ip as text, pos as number, newvalue as number) as text =>
     let
         bytes = List.Transform(Text.Split(ip, "."), Number.FromText),
         updated = List.ReplaceRange(bytes, pos - 1, 1, {newvalue})
     in
-        Text.Combine(List.Transform(updated, Number.ToText), ".");
+        Text.Combine(List.Transform(updated, Number.ToText), "."),
 
 /*--------------------------------------------
    IpSubnetSize
@@ -463,11 +462,11 @@ shared IpSetByte = (ip as text, pos as number, newvalue as number) as text =>
    IpSubnetSize("192.168.1.32/29") returns 8
    IpSubnetSize("192.168.1.0 255.255.255.0") returns 256
 */
-shared IpSubnetSize = (subnet as text) as number =>
+IpSubnetSize = (subnet as text) as number =>
     let
         net = _ParseIpNet(subnet)
     in
-        Number.Power(2, 32 - net[Len]);
+        Number.Power(2, 32 - net[Len]),
 
 /*--------------------------------------------
    IpClearHostBits
@@ -477,8 +476,8 @@ shared IpSubnetSize = (subnet as text) as number =>
    IpClearHostBits("192.168.1.1/24") returns "192.168.1.0/24"
    IpClearHostBits("192.168.1.193 255.255.255.128") returns "192.168.1.128 255.255.255.128"
 */
-shared IpClearHostBits = (net as text) as text =>
-    _IpNetToString(_ParseIpNet(net));
+IpClearHostBits = (net as text) as text =>
+    _IpNetToString(_ParseIpNet(net)),
 
 /*--------------------------------------------
    IpIsInSubnet
@@ -489,13 +488,13 @@ shared IpClearHostBits = (net as text) as text =>
    IpIsInSubnet("192.168.1.35", "192.168.1.32 255.255.255.248") returns true
    IpIsInSubnet("192.168.1.41", "192.168.1.32/29") returns false
 */
-shared IpIsInSubnet = (ip as text, subnet as text) as logical =>
+IpIsInSubnet = (ip as text, subnet as text) as logical =>
     let
         net = _ParseIpNet(subnet),
         ipBytes = List.Transform(Text.Split(ip, "."), Number.FromText),
         maskedIp = _IpAnd(ipBytes, net[Mask])
     in
-        maskedIp = net[Ip];
+        maskedIp = net[Ip],
 
 /*--------------------------------------------
    IpSubnetIsInSubnet
@@ -506,7 +505,7 @@ shared IpIsInSubnet = (ip as text, subnet as text) as logical =>
    IpSubnetIsInSubnet("192.168.1.41/30", "192.168.1.32/29") returns false
    IpSubnetIsInSubnet("192.168.1.35/28", "192.168.1.32/29") returns false
 */
-shared IpSubnetIsInSubnet = (subnet1 as text, subnet2 as text) as logical =>
+IpSubnetIsInSubnet = (subnet1 as text, subnet2 as text) as logical =>
     let
         net1 = _ParseIpNet(subnet1),
         net2 = _ParseIpNet(subnet2)
@@ -514,7 +513,7 @@ shared IpSubnetIsInSubnet = (subnet1 as text, subnet2 as text) as logical =>
         if net1[Len] < net2[Len] then
             false
         else
-            net1[Ip] = _IpAnd(net1[Ip], net2[Mask]);
+            net1[Ip] = _IpAnd(net1[Ip], net2[Mask]),
 
 /*--------------------------------------------
    IpSubnetMatch
@@ -524,7 +523,7 @@ shared IpSubnetIsInSubnet = (subnet1 as text, subnet2 as text) as logical =>
  example:
    IpSubnetMatch("192.168.1.35", {{"192.168.1.0/24"}, {"192.168.1.32/29"}}) returns 2
 */
-shared IpSubnetMatch = (ip as text, table as list) as number =>
+IpSubnetMatch = (ip as text, table as list) as number =>
     let
         searchNet = _ParseIpNet(ip),
 
@@ -548,7 +547,7 @@ shared IpSubnetMatch = (ip as text, table as list) as number =>
                         state
         )
     in
-        FindBest[bestRow];
+        FindBest[bestRow],
 
 /*--------------------------------------------
    IpSubnetVLookup
@@ -558,14 +557,14 @@ shared IpSubnetMatch = (ip as text, table as list) as number =>
  example:
    IpSubnetVLookup("192.168.1.35", {{"192.168.1.0/24", "LAN"}, {"10.0.0.0/8", "Private"}}, 2) returns "LAN"
 */
-shared IpSubnetVLookup = (ip as text, table as list, index as number) as any =>
+IpSubnetVLookup = (ip as text, table as list, index as number) as any =>
     let
         row = IpSubnetMatch(ip, table)
     in
         if row = 0 then
             "Not Found"
         else
-            table{row - 1}{index - 1};
+            table{row - 1}{index - 1},
 
 /*--------------------------------------------
    IpIsPrivate
@@ -575,10 +574,10 @@ shared IpSubnetVLookup = (ip as text, table as list, index as number) as any =>
    IpIsPrivate("192.168.1.35") returns true
    IpIsPrivate("209.85.148.104") returns false
 */
-shared IpIsPrivate = (ip as text) as logical =>
+IpIsPrivate = (ip as text) as logical =>
     IpIsInSubnet(ip, "10.0.0.0/8") or
     IpIsInSubnet(ip, "172.16.0.0/12") or
-    IpIsInSubnet(ip, "192.168.0.0/16");
+    IpIsInSubnet(ip, "192.168.0.0/16"),
 
 /*--------------------------------------------
    IpDivideSubnet
@@ -589,7 +588,7 @@ shared IpIsPrivate = (ip as text) as logical =>
  example:
    IpDivideSubnet("1.2.3.0/24", 2) returns {"1.2.3.0/26", "1.2.3.64/26", "1.2.3.128/26", "1.2.3.192/26"}
 */
-shared IpDivideSubnet = (subnet as text, n as number) as list =>
+IpDivideSubnet = (subnet as text, n as number) as list =>
     let
         net = _ParseIpNet(subnet),
         newLen = net[Len] + n,
@@ -618,7 +617,7 @@ shared IpDivideSubnet = (subnet as text, n as number) as list =>
             in
                 subnets
     in
-        result;
+        result,
 
 /*--------------------------------------------
    IpRangeToCIDR
@@ -628,7 +627,7 @@ shared IpDivideSubnet = (subnet as text, n as number) as list =>
    IpRangeToCIDR("10.0.0.1", "10.0.0.254") returns {"10.0.0.0/24"}
    IpRangeToCIDR("10.0.0.1", "10.0.1.63") returns {"10.0.0.0/24", "10.0.1.0/26"}
 */
-shared IpRangeToCIDR = (firstAddr as text, lastAddr as text) as list =>
+IpRangeToCIDR = (firstAddr as text, lastAddr as text) as list =>
     let
         // Set last bit to zero for first address, to one for last address
         first = IpAnd(firstAddr, "255.255.255.254"),
@@ -662,7 +661,7 @@ shared IpRangeToCIDR = (firstAddr as text, lastAddr as text) as list =>
                 else
                     {netText} & @BuildNetworks(IpAdd(FindNetwork[ip2], 1), targetLast)
     in
-        BuildNetworks(first, last);
+        BuildNetworks(first, last),
 
 //==============================================
 //   Array Functions
@@ -675,7 +674,7 @@ shared IpRangeToCIDR = (firstAddr as text, lastAddr as text) as list =>
  example:
    IpSortArray({"192.168.1.10", "10.0.0.1", "192.168.1.5"}) returns {"10.0.0.1", "192.168.1.5", "192.168.1.10"}
 */
-shared IpSortArray = (arr as list) as list =>
+IpSortArray = (arr as list) as list =>
     let
         // Remove empty values
         filtered = List.Select(arr, each _ <> null and _ <> ""),
@@ -686,7 +685,7 @@ shared IpSortArray = (arr as list) as list =>
             (a, b) => Number.Compare(IpStrToNbr(a), IpStrToNbr(b))
         )
     in
-        sorted;
+        sorted,
 
 /*--------------------------------------------
    IpSubnetSortArray
@@ -695,7 +694,7 @@ shared IpSortArray = (arr as list) as list =>
  example:
    IpSubnetSortArray({"192.168.1.0/24", "10.0.0.0/8", "192.168.1.32/29"})
 */
-shared IpSubnetSortArray = (arr as list) as list =>
+IpSubnetSortArray = (arr as list) as list =>
     let
         // Remove empty values and parse
         filtered = List.Select(arr, each _ <> null and _ <> ""),
@@ -707,7 +706,7 @@ shared IpSubnetSortArray = (arr as list) as list =>
         // Convert back to strings
         result = List.Transform(sorted, _IpNetToString)
     in
-        result;
+        result,
 
 /*--------------------------------------------
    IpFindOverlappingSubnets
@@ -718,7 +717,7 @@ shared IpSubnetSortArray = (arr as list) as list =>
    IpFindOverlappingSubnets({"192.168.1.0/24", "192.168.1.32/29", "10.0.0.0/8"})
    returns {"", "192.168.1.0/24", ""}
 */
-shared IpFindOverlappingSubnets = (arr as list) as list =>
+IpFindOverlappingSubnets = (arr as list) as list =>
     let
         filtered = List.Select(arr, each _ <> null and _ <> ""),
         nets = List.Transform(filtered, _ParseIpNet),
@@ -747,7 +746,7 @@ shared IpFindOverlappingSubnets = (arr as list) as list =>
                     if containing = null then "" else _IpNetToString(nets{containing})
         )
     in
-        results;
+        results,
 
 /*--------------------------------------------
    IpSubnetAggregateArray
@@ -760,7 +759,7 @@ shared IpFindOverlappingSubnets = (arr as list) as list =>
    IpSubnetAggregateArray({"192.168.1.0/25", "192.168.1.128/25", "192.168.1.32/29"})
    returns {"192.168.1.0/24"}
 */
-shared IpSubnetAggregateArray = (arr as list) as list =>
+IpSubnetAggregateArray = (arr as list) as list =>
     let
         // Remove empty values and parse
         filtered = List.Select(arr, each _ <> null and _ <> ""),
@@ -832,7 +831,7 @@ shared IpSubnetAggregateArray = (arr as list) as list =>
         // Convert back to strings
         result = List.Transform(aggregated, _IpNetToString)
     in
-        result;
+        result,
 
 /*--------------------------------------------
    IpRouteAggregateArray
@@ -842,7 +841,7 @@ shared IpSubnetAggregateArray = (arr as list) as list =>
  example:
    IpRouteAggregateArray({"192.168.1.0/25 gw1", "192.168.1.128/25 gw1", "192.168.1.32/29 gw2"})
 */
-shared IpRouteAggregateArray = (arr as list) as list =>
+IpRouteAggregateArray = (arr as list) as list =>
     let
         // Remove empty values
         filtered = List.Select(arr, each _ <> null and _ <> ""),
@@ -983,7 +982,7 @@ shared IpRouteAggregateArray = (arr as list) as list =>
             each _IpNetToString(_) & [Nexthop]
         )
     in
-        result;
+        result,
 
 /*--------------------------------------------
    IpSubtractSubnets
@@ -993,7 +992,7 @@ shared IpRouteAggregateArray = (arr as list) as list =>
  example:
    IpSubtractSubnets({"192.168.1.0/24"}, {"192.168.1.0/25"}) returns {"192.168.1.128/25"}
 */
-shared IpSubtractSubnets = (inputArray as list, subtractArray as list) as list =>
+IpSubtractSubnets = (inputArray as list, subtractArray as list) as list =>
     let
         // Aggregate both arrays first
         input = IpSubnetAggregateArray(inputArray),
@@ -1046,7 +1045,7 @@ shared IpSubtractSubnets = (inputArray as list, subtractArray as list) as list =
         result = Subtract(inputNets, subtractNets, 0, 0),
         resultText = List.Transform(result, _IpNetToString)
     in
-        resultText;
+        resultText,
 
 /*--------------------------------------------
    IpCommonSubnets
@@ -1055,11 +1054,11 @@ shared IpSubtractSubnets = (inputArray as list, subtractArray as list) as list =
  example:
    IpCommonSubnets({"192.168.0.0/23"}, {"192.168.1.0/24"}) returns {"192.168.1.0/24"}
 */
-shared IpCommonSubnets = (inputArray1 as list, inputArray2 as list) as list =>
+IpCommonSubnets = (inputArray1 as list, inputArray2 as list) as list =>
     let
         diff = IpSubtractSubnets(inputArray1, inputArray2)
     in
-        IpSubtractSubnets(inputArray1, diff);
+        IpSubtractSubnets(inputArray1, diff),
 
 /*--------------------------------------------
    IpMergeOnSubnet
@@ -1071,7 +1070,7 @@ shared IpCommonSubnets = (inputArray1 as list, inputArray2 as list) as list =>
    IpMergeOnSubnet(ipTable, "IP", subnetTable, "Subnet", "Left")
    IpMergeOnSubnet(ipTable, "IP", subnetTable, "Subnet", "Inner")
 */
-shared IpMergeOnSubnet = (
+IpMergeOnSubnet = (
     leftTable as table,
     leftIpColumn as text,
     rightTable as table,
@@ -1292,7 +1291,7 @@ shared IpMergeOnSubnet = (
             in
                 finalResult
     in
-        result;
+        result,
 
 //==============================================
 //   IPv6 Internal Helper Functions
@@ -1347,7 +1346,7 @@ _Ipv6Parse = (s as text) as record =>
         else
             ar
     in
-        [Ar = final, Len = len];
+        [Ar = final, Len = len],
 
 /*--------------------------------------------
    _Ipv6Long
@@ -1361,7 +1360,7 @@ _Ipv6Long = (rec as record) as text =>
             each Text.PadStart(Number.ToText(_, "X"), 4, "0")
         )
     in
-        Text.Lower(Text.Combine(parts, ":"));
+        Text.Lower(Text.Combine(parts, ":")),
 
 /*--------------------------------------------
    _Ipv6Compress
@@ -1392,7 +1391,7 @@ _Ipv6Compress = (rec as record) as text =>
             "::"
         )
     in
-        Text.Lower(final);
+        Text.Lower(final),
 
 /*--------------------------------------------
    _Ipv6ToBin
@@ -1406,7 +1405,7 @@ _Ipv6ToBin = (rec as record) as text =>
             each Text.PadStart(Number.ToText(_, 2), 16, "0")
         )
     in
-        Text.Combine(binary, "");
+        Text.Combine(binary, ""),
 
 /*--------------------------------------------
    _Ipv6FromBin
@@ -1423,7 +1422,7 @@ _Ipv6FromBin = (bin as text) as record =>
         else
             List.Repeat({0}, 8)
     in
-        [Ar = ar, Len = 128];
+        [Ar = ar, Len = 128],
 
 //==============================================
 //   IPv6 Public Functions
@@ -1436,14 +1435,14 @@ _Ipv6FromBin = (bin as text) as record =>
  example:
    Ipv6MaskLen("2001:db8:1f89::/48") returns 48
 */
-shared Ipv6MaskLen = (s as text) as number =>
+Ipv6MaskLen = (s as text) as number =>
     let
         slashPos = Text.PositionOf(s, "/")
     in
         if slashPos >= 0 then
             Number.FromText(Text.Middle(s, slashPos + 1))
         else
-            128;
+            128,
 
 /*--------------------------------------------
    Ipv6WithoutMask
@@ -1452,14 +1451,14 @@ shared Ipv6MaskLen = (s as text) as number =>
  example:
    Ipv6WithoutMask("2001:db8:1f89::/48") returns "2001:db8:1f89::"
 */
-shared Ipv6WithoutMask = (s as text) as text =>
+Ipv6WithoutMask = (s as text) as text =>
     let
         slashPos = Text.PositionOf(s, "/")
     in
         if slashPos >= 0 then
             Text.Start(s, slashPos)
         else
-            s;
+            s,
 
 /*--------------------------------------------
    Ipv6IsValid
@@ -1469,7 +1468,7 @@ shared Ipv6WithoutMask = (s as text) as text =>
    Ipv6IsValid("2001:db8::1") returns true
    Ipv6IsValid("invalid") returns false
 */
-shared Ipv6IsValid = (ip as text) as logical =>
+Ipv6IsValid = (ip as text) as logical =>
     try
         let
             doubleColonCount = Text.Length(ip) - Text.Length(Text.Replace(ip, "::", "")),
@@ -1492,7 +1491,7 @@ shared Ipv6IsValid = (ip as text) as logical =>
         in
             valid
     otherwise
-        false;
+        false,
 
 /*--------------------------------------------
    Ipv6Expand
@@ -1502,11 +1501,11 @@ shared Ipv6IsValid = (ip as text) as logical =>
  example:
    Ipv6Expand("1:2:3::8") returns "0001:0002:0003:0000:0000:0000:0000:0008"
 */
-shared Ipv6Expand = (ip as text) as text =>
+Ipv6Expand = (ip as text) as text =>
     let
         parsed = _Ipv6Parse(Ipv6WithoutMask(ip))
     in
-        _Ipv6Long(parsed);
+        _Ipv6Long(parsed),
 
 /*--------------------------------------------
    Ipv6Compress
@@ -1516,11 +1515,11 @@ shared Ipv6Expand = (ip as text) as text =>
    Ipv6Compress("0001:0002:0003:0000:0000:0000:0000:0008") returns "1:2:3::8"
    Ipv6Compress("01:0:0::") returns "1::"
 */
-shared Ipv6Compress = (ip as text) as text =>
+Ipv6Compress = (ip as text) as text =>
     let
         parsed = _Ipv6Parse(Ipv6WithoutMask(ip))
     in
-        _Ipv6Compress(parsed);
+        _Ipv6Compress(parsed),
 
 /*--------------------------------------------
    Ipv6ToBin
@@ -1530,11 +1529,11 @@ shared Ipv6Compress = (ip as text) as text =>
  example:
    Ipv6ToBin("2001:db8::1")
 */
-shared Ipv6ToBin = (ip as text) as text =>
+Ipv6ToBin = (ip as text) as text =>
     let
         parsed = _Ipv6Parse(Ipv6WithoutMask(ip))
     in
-        _Ipv6ToBin(parsed);
+        _Ipv6ToBin(parsed),
 
 /*--------------------------------------------
    Ipv6FromBin
@@ -1544,11 +1543,11 @@ shared Ipv6ToBin = (ip as text) as text =>
  example:
    Ipv6FromBin("00100000...") returns compressed IPv6
 */
-shared Ipv6FromBin = (bin as text) as text =>
+Ipv6FromBin = (bin as text) as text =>
     let
         parsed = _Ipv6FromBin(bin)
     in
-        _Ipv6Compress(parsed);
+        _Ipv6Compress(parsed),
 
 /*--------------------------------------------
    Ipv6AddInt
@@ -1557,7 +1556,7 @@ shared Ipv6FromBin = (bin as text) as text =>
  example:
    Ipv6AddInt("1::2", 16) returns "1::12"
 */
-shared Ipv6AddInt = (ip as text, offset as number) as text =>
+Ipv6AddInt = (ip as text, offset as number) as text =>
     let
         parsed = _Ipv6Parse(Ipv6WithoutMask(ip)),
 
@@ -1578,7 +1577,7 @@ shared Ipv6AddInt = (ip as text, offset as number) as text =>
                         [ar = newAr, carry = newCarry]
         )
     in
-        _Ipv6Compress([Ar = added[ar], Len = parsed[Len]]);
+        _Ipv6Compress([Ar = added[ar], Len = parsed[Len]]),
 
 /*--------------------------------------------
    Ipv6Add
@@ -1588,7 +1587,7 @@ shared Ipv6AddInt = (ip as text, offset as number) as text =>
    Ipv6Add("1:2::", "::3") returns "1:2::3"
    Ipv6Add("1:2::2", "::3") returns "1:2::5"
 */
-shared Ipv6Add = (ip1 as text, ip2 as text) as text =>
+Ipv6Add = (ip1 as text, ip2 as text) as text =>
     let
         parsed1 = _Ipv6Parse(Ipv6WithoutMask(ip1)),
         parsed2 = _Ipv6Parse(Ipv6WithoutMask(ip2)),
@@ -1607,7 +1606,7 @@ shared Ipv6Add = (ip1 as text, ip2 as text) as text =>
                     [ar = newAr, carry = newCarry]
         )
     in
-        _Ipv6Compress([Ar = added[ar], Len = 128]);
+        _Ipv6Compress([Ar = added[ar], Len = 128]),
 
 /*--------------------------------------------
    Ipv6GetBlock
@@ -1617,12 +1616,12 @@ shared Ipv6Add = (ip1 as text, ip2 as text) as text =>
  example:
    Ipv6GetBlock("2001:db8:1f89:c5a3::ac1f:8001", 2) returns "0db8"
 */
-shared Ipv6GetBlock = (ip as text, blockNbr as number) as text =>
+Ipv6GetBlock = (ip as text, blockNbr as number) as text =>
     let
         parsed = _Ipv6Parse(Ipv6WithoutMask(ip)),
         block = parsed[Ar]{blockNbr - 1}
     in
-        Text.Lower(Text.PadStart(Number.ToText(block, "X"), 4, "0"));
+        Text.Lower(Text.PadStart(Number.ToText(block, "X"), 4, "0")),
 
 /*--------------------------------------------
    Ipv6GetBlockInt
@@ -1631,11 +1630,11 @@ shared Ipv6GetBlock = (ip as text, blockNbr as number) as text =>
  example:
    Ipv6GetBlockInt("2001:db8:1f89:c5a3::ac1f:8001", 2) returns 3512
 */
-shared Ipv6GetBlockInt = (ip as text, blockNbr as number) as number =>
+Ipv6GetBlockInt = (ip as text, blockNbr as number) as number =>
     let
         parsed = _Ipv6Parse(Ipv6WithoutMask(ip))
     in
-        parsed[Ar]{blockNbr - 1};
+        parsed[Ar]{blockNbr - 1},
 
 /*--------------------------------------------
    Ipv6SetBlock
@@ -1644,13 +1643,13 @@ shared Ipv6GetBlockInt = (ip as text, blockNbr as number) as number =>
  example:
    Ipv6SetBlock("2001::", 2, "db8") returns "2001:db8::"
 */
-shared Ipv6SetBlock = (ip as text, blockNbr as number, valHex as text) as text =>
+Ipv6SetBlock = (ip as text, blockNbr as number, valHex as text) as text =>
     let
         parsed = _Ipv6Parse(Ipv6WithoutMask(ip)),
         val = try Number.FromText("0x" & valHex) otherwise 0,
         updated = List.ReplaceRange(parsed[Ar], blockNbr - 1, 1, {Number.Mod(val, 65536)})
     in
-        _Ipv6Compress([Ar = updated, Len = parsed[Len]]);
+        _Ipv6Compress([Ar = updated, Len = parsed[Len]]),
 
 /*--------------------------------------------
    Ipv6SetBlockInt
@@ -1659,12 +1658,12 @@ shared Ipv6SetBlock = (ip as text, blockNbr as number, valHex as text) as text =
  example:
    Ipv6SetBlockInt("2001::", 2, 3512) returns "2001:db8::"
 */
-shared Ipv6SetBlockInt = (ip as text, blockNbr as number, valInt as number) as text =>
+Ipv6SetBlockInt = (ip as text, blockNbr as number, valInt as number) as text =>
     let
         parsed = _Ipv6Parse(Ipv6WithoutMask(ip)),
         updated = List.ReplaceRange(parsed[Ar], blockNbr - 1, 1, {Number.Mod(valInt, 65536)})
     in
-        _Ipv6Compress([Ar = updated, Len = parsed[Len]]);
+        _Ipv6Compress([Ar = updated, Len = parsed[Len]]),
 
 /*--------------------------------------------
    Ipv6SetBits
@@ -1675,7 +1674,7 @@ shared Ipv6SetBlockInt = (ip as text, blockNbr as number, valInt as number) as t
  example:
    Ipv6SetBits("2001:db8::", 65, "1111111111111111") sets bits 65-80
 */
-shared Ipv6SetBits = (ip as text, offset as number, bits as text) as text =>
+Ipv6SetBits = (ip as text, offset as number, bits as text) as text =>
     let
         parsed = _Ipv6Parse(Ipv6WithoutMask(ip)),
         bin = _Ipv6ToBin(parsed),
@@ -1687,7 +1686,7 @@ shared Ipv6SetBits = (ip as text, offset as number, bits as text) as text =>
                      ""),
         finalBin = Text.Start(newBin, 128)
     in
-        Ipv6FromBin(finalBin);
+        Ipv6FromBin(finalBin),
 
 /*--------------------------------------------
    Ipv6GetIpv4
@@ -1696,14 +1695,14 @@ shared Ipv6SetBits = (ip as text, offset as number, bits as text) as text =>
  example:
    Ipv6GetIpv4("2001:c0a8:102::", 2) returns "192.168.1.2"
 */
-shared Ipv6GetIpv4 = (ipv6 as text, blockNbr as number) as text =>
+Ipv6GetIpv4 = (ipv6 as text, blockNbr as number) as text =>
     let
         parsed = _Ipv6Parse(Ipv6WithoutMask(ipv6)),
         block1 = parsed[Ar]{blockNbr - 1},
         block2 = parsed[Ar]{blockNbr},
         ipv4Nbr = block1 * 65536 + block2
     in
-        IpBinToStr(ipv4Nbr);
+        IpBinToStr(ipv4Nbr),
 
 /*--------------------------------------------
    Ipv6SetIpv4
@@ -1712,7 +1711,7 @@ shared Ipv6GetIpv4 = (ipv6 as text, blockNbr as number) as text =>
  example:
    Ipv6SetIpv4("2001::", 2, "192.168.1.2") returns "2001:c0a8:102::"
 */
-shared Ipv6SetIpv4 = (ipv6 as text, blockNbr as number, ipv4 as text) as text =>
+Ipv6SetIpv4 = (ipv6 as text, blockNbr as number, ipv4 as text) as text =>
     let
         parsed = _Ipv6Parse(Ipv6WithoutMask(ipv6)),
         ipv4Nbr = IpStrToNbr(ipv4),
@@ -1725,7 +1724,7 @@ shared Ipv6SetIpv4 = (ipv6 as text, blockNbr as number, ipv4 as text) as text =>
             {block2}
         )
     in
-        _Ipv6Compress([Ar = updated, Len = parsed[Len]]);
+        _Ipv6Compress([Ar = updated, Len = parsed[Len]]),
 
 /*--------------------------------------------
    Ipv6IsInSubnet
@@ -1735,13 +1734,13 @@ shared Ipv6SetIpv4 = (ipv6 as text, blockNbr as number, ipv4 as text) as text =>
    Ipv6IsInSubnet("2001:db8:1::ac1f:1", "2001:db8:1::/48") returns true
    Ipv6IsInSubnet("2001:db8:2::ac1f:1", "2001:db8:1::/48") returns false
 */
-shared Ipv6IsInSubnet = (ip as text, subnet as text) as logical =>
+Ipv6IsInSubnet = (ip as text, subnet as text) as logical =>
     let
         prefixLen = Ipv6MaskLen(subnet),
         subnetBin = Text.Start(Ipv6ToBin(subnet), prefixLen),
         ipBin = Text.Start(Ipv6ToBin(ip), prefixLen)
     in
-        subnetBin = ipBin;
+        subnetBin = ipBin,
 
 /*--------------------------------------------
    Ipv6SubnetFirstAddress
@@ -1750,12 +1749,12 @@ shared Ipv6IsInSubnet = (ip as text, subnet as text) as logical =>
  example:
    Ipv6SubnetFirstAddress("2001:db8:1:1a0::/59") returns "2001:db8:1:1a0::"
 */
-shared Ipv6SubnetFirstAddress = (subnet as text) as text =>
+Ipv6SubnetFirstAddress = (subnet as text) as text =>
     let
         prefixLen = Ipv6MaskLen(subnet),
         zeros = Text.Repeat("0", 128 - prefixLen)
     in
-        Ipv6SetBits(subnet, prefixLen + 1, zeros);
+        Ipv6SetBits(subnet, prefixLen + 1, zeros),
 
 /*--------------------------------------------
    Ipv6SubnetLastAddress
@@ -1764,12 +1763,12 @@ shared Ipv6SubnetFirstAddress = (subnet as text) as text =>
  example:
    Ipv6SubnetLastAddress("2001:db8:1:1a0::/59") returns "2001:db8:1:1bf:ffff:ffff:ffff:ffff"
 */
-shared Ipv6SubnetLastAddress = (subnet as text) as text =>
+Ipv6SubnetLastAddress = (subnet as text) as text =>
     let
         prefixLen = Ipv6MaskLen(subnet),
         ones = Text.Repeat("1", 128 - prefixLen)
     in
-        Ipv6SetBits(subnet, prefixLen + 1, ones);
+        Ipv6SetBits(subnet, prefixLen + 1, ones),
 
 /*--------------------------------------------
    Ipv6SortArray
@@ -1778,7 +1777,7 @@ shared Ipv6SubnetLastAddress = (subnet as text) as text =>
  example:
    Ipv6SortArray({"2001:db8::1", "2001:db8::10", "2001:db8::2"})
 */
-shared Ipv6SortArray = (arr as list) as list =>
+Ipv6SortArray = (arr as list) as list =>
     let
         // Remove empty values
         filtered = List.Select(arr, each _ <> null and _ <> ""),
@@ -1796,4 +1795,61 @@ shared Ipv6SortArray = (arr as list) as list =>
                     else 1
         )
     in
-        sorted;
+        sorted
+
+in
+[
+    IpIsValid = IpIsValid,
+    IpStrToNbr = IpStrToNbr,
+    IpBinToStr = IpBinToStr,
+    IpAnd = IpAnd,
+    IpOr = IpOr,
+    IpXor = IpXor,
+    IpWithoutMask = IpWithoutMask,
+    IpSubnetLen = IpSubnetLen,
+    IpMask = IpMask,
+    IpWildMask = IpWildMask,
+    IpInvertMask = IpInvertMask,
+    IpMaskLen = IpMaskLen,
+    IpAdd = IpAdd,
+    IpDiff = IpDiff,
+    IpGetByte = IpGetByte,
+    IpSetByte = IpSetByte,
+    IpSubnetSize = IpSubnetSize,
+    IpClearHostBits = IpClearHostBits,
+    IpIsInSubnet = IpIsInSubnet,
+    IpSubnetIsInSubnet = IpSubnetIsInSubnet,
+    IpSubnetMatch = IpSubnetMatch,
+    IpSubnetVLookup = IpSubnetVLookup,
+    IpIsPrivate = IpIsPrivate,
+    IpDivideSubnet = IpDivideSubnet,
+    IpRangeToCIDR = IpRangeToCIDR,
+    IpSortArray = IpSortArray,
+    IpSubnetSortArray = IpSubnetSortArray,
+    IpFindOverlappingSubnets = IpFindOverlappingSubnets,
+    IpSubnetAggregateArray = IpSubnetAggregateArray,
+    IpRouteAggregateArray = IpRouteAggregateArray,
+    IpSubtractSubnets = IpSubtractSubnets,
+    IpCommonSubnets = IpCommonSubnets,
+    IpMergeOnSubnet = IpMergeOnSubnet,
+    Ipv6MaskLen = Ipv6MaskLen,
+    Ipv6WithoutMask = Ipv6WithoutMask,
+    Ipv6IsValid = Ipv6IsValid,
+    Ipv6Expand = Ipv6Expand,
+    Ipv6Compress = Ipv6Compress,
+    Ipv6ToBin = Ipv6ToBin,
+    Ipv6FromBin = Ipv6FromBin,
+    Ipv6AddInt = Ipv6AddInt,
+    Ipv6Add = Ipv6Add,
+    Ipv6GetBlock = Ipv6GetBlock,
+    Ipv6GetBlockInt = Ipv6GetBlockInt,
+    Ipv6SetBlock = Ipv6SetBlock,
+    Ipv6SetBlockInt = Ipv6SetBlockInt,
+    Ipv6SetBits = Ipv6SetBits,
+    Ipv6GetIpv4 = Ipv6GetIpv4,
+    Ipv6SetIpv4 = Ipv6SetIpv4,
+    Ipv6IsInSubnet = Ipv6IsInSubnet,
+    Ipv6SubnetFirstAddress = Ipv6SubnetFirstAddress,
+    Ipv6SubnetLastAddress = Ipv6SubnetLastAddress,
+    Ipv6SortArray = Ipv6SortArray
+]
