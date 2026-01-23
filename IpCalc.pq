@@ -12,23 +12,21 @@ let
     _IpToNbr = (bytes as list) as number => List.Accumulate(bytes, 0, (state, current) => state * 256 + current),
 /*--------------------------------------------
    _IpFromNbr
-----------------------------------------------
- Converts a number to a list of 4 bytes
- example:
-   _IpFromNbr(16909060) returns {1, 2, 3, 4}
+ ----------------------------------------------
+  Converts a number to a list of 4 bytes
+  example:
+    _IpFromNbr(16909060) returns {1, 2, 3, 4}
 */
     _IpFromNbr = (nbr as number) as list =>
         let
-            Generate = List.Generate(
-                () => [value = nbr, result = {}],
-                each List.Count([result]) < 4,
-                each [
-                    result = {Number.Mod([value], 256)} & [result],
-                    value = Number.IntegerDivide([value], 256)
-                ]
-            )
+            values = {
+                Number.Mod(Number.IntegerDivide(nbr, 16777216), 256),
+                Number.Mod(Number.IntegerDivide(nbr, 65536), 256),
+                Number.Mod(Number.IntegerDivide(nbr, 256), 256),
+                Number.Mod(nbr, 256)
+            }
         in
-            Generate{List.Count(Generate) - 1}[result],
+            values,
 /*--------------------------------------------
    _IpAnd
 ----------------------------------------------
