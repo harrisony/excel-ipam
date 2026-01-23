@@ -1681,7 +1681,7 @@ IpSortTable = (
         // Determine column to sort by
         colName = if columnName is null then
                     Table.ColumnNames(table){0}
-                  else if Type.Is(columnName, type number) then
+                  else if Value.Is(columnName, type number) then
                     Table.ColumnNames(table){columnName}
                   else
                     columnName,
@@ -1706,34 +1706,43 @@ IpSortTable = (
         ),
 
         withPrefixKey = Table.AddColumn(
-            withPrefixKey,
+            withIpKey,
             "_PrefixKey",
             each if [_Parsed] = null then null else [_Parsed][Len]
         ),
 
-        // Handle nulls (empty cells and invalid entries go to end)
+        // Add column to handle nulls (empty cells and invalid entries go to end)
+        withNullFlag = Table.AddColumn(
+            withPrefixKey,
+            "_IsNull",
+            each
+                let
+                    val = Record.Field(_, colName)
+                in
+                    if val = null or val = "" or [_Parsed] = null then 1 else 0
+        ),
+
+        // Sort based on prefix order setting
         sorted = if prefixOrdValid = "none" then
             Table.Sort(
-                withPrefixKey,
+                withNullFlag,
                 {
-                    each Record.Field(_, colName) = null or Record.Field(_, colName) = "", Order.Ascending,
-                    each [_Parsed] = null, Order.Ascending,
-                    {_IpKey, if desc then Order.Descending else Order.Ascending}
+                    {"_IsNull", Order.Ascending},
+                    {"_IpKey", if desc then Order.Descending else Order.Ascending}
                 }
             )
         else
             Table.Sort(
-                withPrefixKey,
+                withNullFlag,
                 {
-                    each Record.Field(_, colName) = null or Record.Field(_, colName) = "", Order.Ascending,
-                    each [_Parsed] = null, Order.Ascending,
-                    {_IpKey, if desc then Order.Descending else Order.Ascending},
-                    {_PrefixKey, if prefixOrdValid = "longest" then Order.Descending else Order.Ascending}
+                    {"_IsNull", Order.Ascending},
+                    {"_IpKey", if desc then Order.Descending else Order.Ascending},
+                    {"_PrefixKey", if prefixOrdValid = "longest" then Order.Descending else Order.Ascending}
                 }
             ),
 
         // Remove temporary columns
-        result = Table.RemoveColumns(sorted, {"_Parsed", "_IpKey", "_PrefixKey"})
+        result = Table.RemoveColumns(sorted, {"_Parsed", "_IpKey", "_PrefixKey", "_IsNull"})
     in
         result,
 
