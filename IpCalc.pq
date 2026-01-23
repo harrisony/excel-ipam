@@ -23,13 +23,12 @@ let
                 () => [value = nbr, result = {}],
                 each List.Count([result]) < 4,
                 each [
-                    value = Number.IntegerDivide([value], 256),
-                    result = {Number.Mod([value], 256)} & [result]
-                ],
-                each [result]
+                    result = {Number.Mod([value], 256)} & [result],
+                    value = Number.IntegerDivide([value], 256)
+                ]
             )
         in
-            Generate{List.Count(Generate) - 1},
+            Generate{List.Count(Generate) - 1}[result],
 /*--------------------------------------------
    _IpAnd
 ----------------------------------------------
