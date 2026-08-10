@@ -719,13 +719,71 @@ let
             }
         ],
 
-    IpSubnetParseDoc = Value.ReplaceType(IpSubnetParse, IpSubnetParseType)
+    IpSubnetParseDoc = Value.ReplaceType(IpSubnetParse, IpSubnetParseType),
+
+    /*
+        Returns the prefix length from an IPv4 subnet expression.
+
+        The VBA implementation finds a CIDR prefix after "/", derives a
+        prefix from a dotted-decimal mask after a space, and treats an
+        unmasked address as a /32 host address. M values are immutable, so
+        this function delegates to IpSubnetParse and selects its
+        PrefixLength field rather than re-parsing the subnet independently.
+
+        The JavaScript counterpart is ipSubnetLen, which reads the len field
+        from IpNet. This M contract preserves the documented results while
+        explicitly rejecting null, malformed addresses, invalid prefix
+        lengths, and non-canonical masks through IpSubnetParse.
+
+        Examples:
+            IpSubnetLenDoc("192.168.1.1/24") = 24
+            IpSubnetLenDoc("192.168.1.1 255.255.255.0") = 24
+            IpSubnetLenDoc("192.168.1.1") = 32
+    */
+    IpSubnetLen = (subnet as nullable text) as number =>
+        let
+            parsedSubnet = IpSubnetParse(subnet)
+        in
+            parsedSubnet[PrefixLength],
+
+    IpSubnetLenType =
+        type function (
+            subnet as (type nullable text meta [
+                Documentation.Name = "IPv4 subnet",
+                Documentation.Description = "An IPv4 address with optional CIDR or dotted-mask notation."
+            ])
+        ) as number meta [
+            Documentation.Name = "IpSubnetLen",
+            Documentation.Description = "Returns the prefix length from an IPv4 subnet expression.",
+            Documentation.LongDescription = "Accepts a dotted IPv4 address, CIDR notation, or dotted-decimal mask notation and returns a prefix length from 0 through 32. An unmasked address is treated as /32; malformed addresses, invalid prefixes, and non-canonical masks raise structured validation errors.",
+            Documentation.Examples = {
+                [
+                    Description = "Get the prefix length from CIDR notation.",
+                    Code = "IpSubnetLen(\"192.168.1.1/24\")",
+                    Result = "24"
+                ],
+                [
+                    Description = "Get the prefix length from dotted-mask notation.",
+                    Code = "IpSubnetLen(\"192.168.1.1 255.255.255.0\")",
+                    Result = "24"
+                ],
+                [
+                    Description = "Treat an address without a mask as a /32 host address.",
+                    Code = "IpSubnetLen(\"192.168.1.1\")",
+                    Result = "32"
+                ]
+            }
+        ],
+
+    IpSubnetLenDoc = Value.ReplaceType(IpSubnetLen, IpSubnetLenType)
 in
     [
         IpStrToBin = IpStrToBinDoc,
         IpBinToStr = IpBinToStrDoc,
         IpParse = IpParseDoc,
         IpBuild = IpBuildDoc,
+        IpComp = IpCompDoc,
         IpMaskLen = IpMaskLenDoc,
-        IpSubnetParse = IpSubnetParseDoc
+        IpSubnetParse = IpSubnetParseDoc,
+        IpSubnetLen = IpSubnetLenDoc
     ]

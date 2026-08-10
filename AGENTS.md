@@ -17,9 +17,19 @@ There is no Power Query runtime, and there never will be one. All validation mus
 Before implementing or reviewing an M function:
 
 1. Read `POWERQUERY-M-IPAM-NOTES.md` and identify every applicable rule.
-2. Use the Microsoft Learn MCP to verify M language semantics, native functions, and type behavior.
+2. Use the Microsoft Learn MCP (`mcp__microsoftLearnDocs__microsoft_docs_search`
+   followed by `mcp__microsoftLearnDocs__microsoft_docs_fetch` when detail is
+   needed) to verify M language semantics, native functions, and type behavior.
+   Do not use web search, browser search, or direct `learn.microsoft.com` web
+   requests for this repository; the Microsoft Learn MCP is the authoritative
+   documentation path.
 3. Consult the JavaScript and VBA files for intended behavior, not as translation templates.
 4. Inspect dependencies and their Beads. Ask before implementing an unfinished dependency.
+5. Identify the function's semantic operation before writing code (for example,
+   parsing, validation, projection, transformation, lookup, or aggregation).
+   Implement that operation using M-native values and composition; do not
+   mechanically reproduce the reference implementation's control flow,
+   mutation, or intermediate representation.
 
 “Idiomatic” and “best practice” require evidence. Search for native `Number.*`, `Text.*`, `List.*`, `Record.*`, and `Table.*` operations before writing manual logic. Explain rejected alternatives and document deliberate deviations.
 
