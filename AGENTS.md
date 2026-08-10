@@ -1,59 +1,41 @@
-# Project scope
+# Repository Guidelines
 
-This project converts a number of Excel IP address calculation functions to Power Query, with the aim of building a reusable library for IP address manipulation.
+## Purpose and Structure
 
-# IP address calculation references
+This repository converts Excel IP address calculations into a reusable Power Query M library.
 
-The local reference sources are:
+- `IpQ_ipv4.m`: Power Query IPv4 implementation.
+- `ip-calc.js`: JavaScript behavioral reference.
+- `ipcalc_module.bas`: extracted VBA behavioral reference.
+- `POWERQUERY-M-IPAM-NOTES.md`: mandatory project-specific M guidance.
+- `.beads/`: task and dependency tracking.
 
-- [JavaScript implementation](ip-calc.js)
-- [Extracted VBA module](ipcalc_module.bas)
+There is no Power Query runtime, and there never will be one. All validation must be source-level, reference-based, and deliberate.
 
-The original upstream references are:
+## Research and Design Gate
 
-- [JavaScript source](http://trk.free.fr/ipcalc/ip-calc.js)
-- [Excel workbook containing the VBA source](http://trk.free.fr/ipcalc/ip-calc.xlsm)
-- [IP calculation project page](http://trk.free.fr/ipcalc/)
+Before implementing or reviewing an M function:
 
-Power Query references:
+1. Read `POWERQUERY-M-IPAM-NOTES.md` and identify every applicable rule.
+2. Use the Microsoft Learn MCP to verify M language semantics, native functions, and type behavior.
+3. Consult the JavaScript and VBA files for intended behavior, not as translation templates.
+4. Inspect dependencies and their Beads. Ask before implementing an unfinished dependency.
 
-- [Power Query M formula language](https://learn.microsoft.com/en-us/powerquery-m/)
-- [Power Query M language specification: consolidated grammar](https://learn.microsoft.com/en-us/powerquery-m/m-spec-consolidated-grammar)
-- [Power Query M Primer](https://bengribaudo.com/power-query-m-primer)
+“Idiomatic” and “best practice” require evidence. Search for native `Number.*`, `Text.*`, `List.*`, `Record.*`, and `Table.*` operations before writing manual logic. Explain rejected alternatives and document deliberate deviations.
 
-## Standalone Power Query design guidance
+## M Coding Standards
 
-- Before implementing or reviewing any Power Query M function, read [Power Query M IPAM build notes](POWERQUERY-M-IPAM-NOTES.md) and apply its relevant guidance. Treat it as project-specific implementation policy, not optional background material; document deliberate deviations in the implementation or focused validation.
-- Prefer idiomatic, readable, maintainable Power Query M and established M best practices. Use the VBA and JavaScript implementations as behavioral references. Preserve their intended IPAM semantics and documented examples, while designing idiomatic Power Query M contracts and correcting implementation artifacts or inconsistencies where appropriate.
-- M `number` arithmetic and equality use double precision by default. IPv4 integers, octets, masks, and prefix lengths are safe as numbers, but IPv6 must not be represented as one numeric value. Prefer text at public boundaries and a list of bytes or `binary` internally; use records for parsed address/subnet state.
-- `null` is distinct from false and zero: `null = null` is true, while arithmetic and relational operations involving `null` generally yield `null`. Make validation and fallback behavior explicit.
-- Lists are ordered and zero-based; records provide named fields. Use `Record.Field` for dynamic field names and fixed record lookup for static names.
-- Preserve explicit table schemas for empty results; do not rely on input-derived column inference when downstream steps require those columns.
-- Use `Table.RenameColumns` for actual table renames. Treat `Value.ReplaceType` as a type annotation only: table type details apply positionally, and implementation bugs can make ascribed names disagree with operations such as filtering.
-- When several output fields depend on one parsed or source value, bind that value once in the relevant `let`/row scope and reuse it; do not invoke the parser or source independently for each field.
-- Use `Value.Is`/`Type.Is` for type compatibility; reserve `=` between type values for deliberate identity or host-subtype-claim checks, since separately constructed equivalent type values may compare unequal.
-- Treat table column type annotations as truthful output contracts, not conversion or validation. Use `Table.TransformColumnTypes` when values must be converted and checked; use `Value.ReplaceType` only when the existing values already satisfy the claim.
-- Write public IPAM functions with a descriptive block comment, a readable `let` implementation, an adjacent `<FunctionName>Type` carrying `Documentation.*` metadata for the function and parameters, and a final `<FunctionName>Doc = Value.ReplaceType(...)` binding. Documentation metadata improves the host experience but does not replace explicit runtime validation.
-- Choose join shape deliberately: `Table.Join` immediately flattens matches and can multiply rows, while `Table.NestedJoin` preserves one left row with a nested matches table until expansion is explicitly requested.
-- Use `JoinKind.LeftSemi`/`LeftAnti` for existence/non-existence filters without row multiplication; treat a cross join as an explicit Cartesian-product operation with deliberate cardinality checks.
-- M is dependency-ordered, immutable, and streaming-oriented. Tables and lists are not guaranteed snapshots; use `Table.Buffer` or `List.Buffer` only when a repeatable in-memory snapshot is required and the memory cost and loss of folding are justified. Buffer after filtering/reduction where possible, and remember buffering is shallow.
+Use readable `let` expressions, explicit contracts and schemas, and function documentation metadata. Parse or derive each value once and reuse it. Make null and malformed-input behavior explicit. Represent IPv6 as text, byte lists, or binary—not one number. Use truthful type annotations and deliberate table joins. Buffer only when a repeatable snapshot is required.
 
-## Reference implementation policy
+## Measure Twice, Cut Once
 
-- Treat `ip-calc.js` and `ipcalc_module.bas` as reference implementations that
-  describe the intended IPAM functionality.
-- Prefer clear, idiomatic, maintainable Power Query M over mechanical
-  translation.
-- Preserve meaningful functional behavior and documented examples, but do not
-  preserve implementation artifacts, Excel-specific APIs, mutation patterns,
-  permissive parsing, or apparent bugs.
-- When the references differ or are ambiguous, choose an explicit M-native
-  contract based on the documented purpose, mathematical behavior, and useful
-  validation rules.
-- Record important interpretation decisions in tests or implementation notes.
-- Public M functions should expose Power Query values and schemas, not VBA
-  `Range`, `Variant`, `ByRef`, or worksheet-array conventions.
+Before completion, perform two separate reviews:
 
-## Bead dependency workflow
+- **Behavioral review:** documented examples, boundaries, nulls, malformed input, empty results, and agreement with the references.
+- **M review:** native-function usage, type correctness, schema accuracy, dependency ordering, duplicate evaluation, buffering, and accidental row multiplication.
 
-- When given a Bead to convert a function from the VBA and/or JavaScript reference implementation, inspect its function dependencies before implementing it. If a dependency has not yet been converted, find the Bead for that dependency and ask the user whether they want the dependency implemented first before proceeding with the requested Bead.
+Use `git diff --check` for basic source checks. If behavior cannot be established confidently from the notes, Microsoft Learn MCP, references, and source inspection, leave the uncertainty documented rather than declaring the work complete.
+
+## Commits
+
+Use concise prefixes consistent with project history, such as `feat:`, `fix:`, `docs:`, and `chore:`.
