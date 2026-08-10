@@ -18,6 +18,7 @@ The original upstream references are:
 Power Query references:
 
 - [Power Query M formula language](https://learn.microsoft.com/en-us/powerquery-m/)
+- [Power Query M language specification: consolidated grammar](https://learn.microsoft.com/en-us/powerquery-m/m-spec-consolidated-grammar)
 - [Power Query M Primer](https://bengribaudo.com/power-query-m-primer)
 
 ## Standalone Power Query design guidance
