@@ -9,6 +9,11 @@
     ASCII decimal octets, each in the inclusive range 0..255. Leading zeroes
     are accepted because they do not change the numeric value.
 
+    The JavaScript counterpart is ipStrToNbr, implemented through _ipToNbr;
+    both use the same base-256 accumulation for valid IPv4 input. M rejects
+    malformed or out-of-range input explicitly instead of inheriting
+    JavaScript's numeric coercion behavior.
+
     Example:
         IpStrToBinDoc("1.2.3.4") = 16909060
 */
@@ -119,6 +124,10 @@ let
         then prepends each digit to the result. The validated M contract is
         the unsigned IPv4 integer range 0..4294967295.
 
+        The JavaScript counterpart is ipNbrToStr, implemented through _ipFromNbr;
+        this function preserves its four-octet output for the validated IPv4
+        range while making the range and whole-number requirements explicit.
+
         Example:
             IpBinToStrDoc(16909060) = "1.2.3.4"
     */
@@ -160,8 +169,8 @@ let
                     [Value = checkedIp, Octets = {}],
                     (state as record, _ as number) as record =>
                         let
-                            quotient = Number.RoundDown(state[Value] / 256),
-                            remainder = state[Value] - quotient * 256
+                            quotient = Number.IntegerDivide(state[Value], 256),
+                            remainder = Number.Mod(state[Value], 256)
                         in
                             [
                                 Value = quotient,
@@ -286,7 +295,7 @@ let
                 Documentation.Name = "IPv4 address fragment",
                 Documentation.Description = "An IPv4 address or partial address whose rightmost byte is parsed."
             ])
-        ) as record meta [
+        ) as [Byte = number, Remainder = text] meta [
             Documentation.Name = "IpParse",
             Documentation.Description = "Parses and removes the rightmost byte from an IPv4 address fragment.",
             Documentation.LongDescription = "Returns a record containing Byte and Remainder fields. The input is processed from right to left; Remainder is the text before the final dot, or an empty text value when no dot is present. The extracted byte must be an ASCII decimal integer from 0 through 255.",
@@ -312,12 +321,114 @@ let
     IpParseDoc = Value.ReplaceType(IpParse, IpParseType),
 
     /*
+        Prepends the low byte of an IPv4 calculation to an address fragment.
+
+        VBA returns the remaining base-256 carry while mutating its ByRef
+        address argument. M values are immutable, so this version returns a
+        record containing both results. The low eight bits are represented by
+        Ip and the remaining quotient by Carry. A non-empty address fragment
+        is separated with a dot; an empty fragment receives no leading dot.
+
+        Examples:
+            IpBuildDoc(192, "168.1.1")
+                = [Ip = "192.168.1.1", Carry = 0]
+            IpBuildDoc(258, "1")
+                = [Ip = "2.1", Carry = 1]
+
+        Unlike VBA's implicit numeric coercion, the M contract requires a
+        non-negative whole number that can be represented exactly by M's
+        double-precision number type.
+    */
+    IpBuild = (ipByte as nullable number, ip as nullable text) as record =>
+        let
+            fail = (message as text, detail as record) as none =>
+                error Error.Record("IpBuild.InvalidInput", message, detail),
+
+            checkedIpByte =
+                if ipByte = null then
+                    fail(
+                        "IPv4 byte value cannot be null.",
+                        [Input = ipByte, Component = "byte", Expected = "non-negative whole number"]
+                    )
+                else if ipByte < 0 then
+                    fail(
+                        "IPv4 byte value must be non-negative.",
+                        [Input = ipByte, Component = "byte", Expected = "non-negative whole number"]
+                    )
+                else if Number.RoundDown(ipByte) <> ipByte then
+                    fail(
+                        "IPv4 byte value must be a whole number.",
+                        [Input = ipByte, Component = "byte", Expected = "non-negative whole number"]
+                    )
+                else if ipByte > Number.Power(2, 53) - 1 then
+                    fail(
+                        "IPv4 byte value must be within M's exact integer range.",
+                        [Input = ipByte, Component = "byte", Expected = "0..9007199254740991"]
+                    )
+                else
+                    ipByte,
+
+            checkedIp =
+                if ip = null then
+                    fail(
+                        "IPv4 address fragment cannot be null.",
+                        [Input = ip, Component = "address fragment", Expected = "text"]
+                    )
+                else
+                    ip,
+            carry = Number.IntegerDivide(checkedIpByte, 256),
+            lowByte = Number.Mod(checkedIpByte, 256),
+            prefix = Number.ToText(lowByte, "0", "en-US"),
+            builtIp = if checkedIp = "" then prefix else prefix & "." & checkedIp
+        in
+            [Ip = builtIp, Carry = carry],
+
+    IpBuildType =
+        type function (
+            ipByte as (type nullable number meta [
+                Documentation.Name = "IPv4 byte value",
+                Documentation.Description = "A non-negative whole number whose low eight bits are prepended."
+            ]),
+            ip as (type nullable text meta [
+                Documentation.Name = "IPv4 address fragment",
+                Documentation.Description = "The existing dotted-decimal fragment to receive the new low byte."
+            ])
+        ) as [Ip = text, Carry = number] meta [
+            Documentation.Name = "IpBuild",
+            Documentation.Description = "Prepends the low byte of a number to an IPv4 address fragment and returns the remaining carry.",
+            Documentation.LongDescription = "Returns a record with Ip and Carry fields. Ip contains the low eight bits followed by the original fragment, and Carry is the integer quotient after division by 256. This record is the immutable M equivalent of the VBA function's ByRef string and numeric return value.",
+            Documentation.Examples = {
+                [
+                    Description = "Prepend a byte without a carry.",
+                    Code = "IpBuild(192, \"168.1.1\")",
+                    Result = "[Ip = \"192.168.1.1\", Carry = 0]"
+                ],
+                [
+                    Description = "Prepend the low byte and return the carry.",
+                    Code = "IpBuild(258, \"1\")",
+                    Result = "[Ip = \"2.1\", Carry = 1]"
+                ],
+                [
+                    Description = "Build the first byte of an address.",
+                    Code = "IpBuild(255, \"\")",
+                    Result = "[Ip = \"255\", Carry = 0]"
+                ]
+            }
+        ],
+
+    IpBuildDoc = Value.ReplaceType(IpBuild, IpBuildType),
+
+    /*
         Returns the prefix length represented by a dotted-decimal IPv4 mask.
 
         A subnet mask is valid when it is the canonical mask for one of the
         prefix lengths 0..32. Comparing against those 33 masks is explicit,
         exact for IPv4 numbers, and rejects non-contiguous masks rather than
         assigning them an ambiguous prefix length.
+
+        The JavaScript counterpart is ipMaskLen. Unlike its binary-string
+        implementation, this M contract rejects non-contiguous masks explicitly
+        instead of deriving a misleading prefix length from the last one bit.
 
         Example:
             IpMaskLenDoc("255.255.255.0") = 24
@@ -471,15 +582,20 @@ let
                     IpMaskLen(suffixText)
                 else
                     32,
-            addressValue = IpStrToBin(addressText),
+            validatedAddress = try IpStrToBin(addressText),
             result =
-                if addressValue >= 0 then
-                    [Address = addressText, PrefixLength = prefixLength]
-                else
+                if validatedAddress[HasError] then
                     fail(
                         "IPv4 address must be in the dotted-decimal format.",
-                        [Input = subnet, Component = "address", Value = addressText]
+                        [
+                            Input = subnet,
+                            Component = "address",
+                            Value = addressText,
+                            Cause = validatedAddress[Error]
+                        ]
                     )
+                else
+                    [Address = addressText, PrefixLength = prefixLength]
         in
             result,
 
@@ -489,7 +605,7 @@ let
                 Documentation.Name = "IPv4 subnet",
                 Documentation.Description = "An IPv4 address with optional CIDR or dotted-mask notation."
             ])
-        ) as record meta [
+        ) as [Address = text, PrefixLength = number] meta [
             Documentation.Name = "IpSubnetParse",
             Documentation.Description = "Parses an IPv4 address and optional subnet mask.",
             Documentation.LongDescription = "Returns a record with Address and PrefixLength fields. CIDR notation and dotted-decimal mask notation are supported; an address without a mask is treated as /32.",
@@ -518,6 +634,7 @@ in
         IpStrToBin = IpStrToBinDoc,
         IpBinToStr = IpBinToStrDoc,
         IpParse = IpParseDoc,
+        IpBuild = IpBuildDoc,
         IpMaskLen = IpMaskLenDoc,
         IpSubnetParse = IpSubnetParseDoc
     ]
