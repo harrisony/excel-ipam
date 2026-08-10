@@ -2741,6 +2741,24 @@ let
         A range whose normalized first address exceeds its normalized last
         address raises a structured validation error.
 
+        Candidate prefix lengths run 0..32, a deliberate departure from the
+        VBA/JavaScript references. Both references start their greedy trial
+        prefix length at 1 (l = 0 then l = l + 1 before the first candidate is
+        tried), so neither can ever select /0, even though their own stated
+        goal is unqualified: "find the largest network which first address is
+        firstAddr and which last address is not higher than lastAddr." /0
+        satisfies that condition whenever the normalized range spans the
+        entire address space, and every other prefix-accepting function in
+        this file (IpMaskLen, IpSubnetParseWithAddressValue, IpSubnetMatch)
+        already treats /0 as an ordinary, valid prefix, so excluding it here
+        would be inconsistent with the rest of the library. Neither reference
+        documents or tests the full-address-space case, and the JavaScript
+        port shares the VBA's loop structure closely enough that their
+        agreement does not corroborate the omission as intentional. Covering
+        "0.0.0.0" through "255.255.255.255" therefore collapses to the single
+        block "0.0.0.0/0" rather than the two /1 blocks the references would
+        produce.
+
         Examples:
             IpRangeToCIDRDoc("10.0.0.1", "10.0.0.254")
                 = {"10.0.0.0/24"}
@@ -2748,6 +2766,8 @@ let
                 = {"10.0.0.0/24", "10.0.1.0/26"}
             IpRangeToCIDRDoc("10.0.0.0", "10.0.0.255", true)
                 = {"10.0.0.0/24"}
+            IpRangeToCIDRDoc("0.0.0.0", "255.255.255.255")
+                = {"0.0.0.0/0"}
     */
     IpRangeToCIDR = (
         firstAddress as nullable text,
@@ -2768,7 +2788,7 @@ let
                 else
                     Number.IntegerDivide(lastValue, 2) * 2 + 1,
 
-            candidatePrefixes = {1..32},
+            candidatePrefixes = {0..32},
             largestBlock = (current as number) as record =>
                 let
                     candidates =
@@ -2858,7 +2878,7 @@ let
         ) as list meta [
             Documentation.Name = "IpRangeToCIDR",
             Documentation.Description = "Converts an IPv4 address range into an aligned CIDR list.",
-            Documentation.LongDescription = "Expands the endpoints to the reference's even-first and odd-last boundaries, then returns the smallest aligned CIDR block list covering that normalized range. The result is a Power Query list of CIDR text; null descending means ascending order, and invalid or reversed normalized ranges raise structured validation errors.",
+            Documentation.LongDescription = "Expands the endpoints to the reference's even-first and odd-last boundaries, then returns the smallest aligned CIDR block list covering that normalized range, including /0 for the full address space. The result is a Power Query list of CIDR text; null descending means ascending order, and invalid or reversed normalized ranges raise structured validation errors.",
             Documentation.Examples = {
                 [
                     Description = "Convert a single-subnet address range.",
@@ -2874,6 +2894,11 @@ let
                     Description = "Reverse the generated list.",
                     Code = "IpRangeToCIDR(\"10.0.0.0\", \"10.0.0.255\", true)",
                     Result = "{\"10.0.0.0/24\"}"
+                ],
+                [
+                    Description = "Collapse the entire IPv4 address space to a single /0 block.",
+                    Code = "IpRangeToCIDR(\"0.0.0.0\", \"255.255.255.255\")",
+                    Result = "{\"0.0.0.0/0\"}"
                 ]
             }
         ],
@@ -3295,7 +3320,14 @@ let
         Range concept, so the public contract is a table with a required
         Subnet column and a caller-selected result column. The result is
         returned as nullable text to preserve the VBA function's String
-        boundary; null means that no subnet matched.
+        boundary. The VBA reference returns the sentinel string "Not Found"
+        for no match, which this M port deliberately avoids in favor of null;
+        as a consequence, null means either no subnet matched or a subnet
+        matched but the selected result column held null for that row -- this
+        function does not distinguish the two, the same way a SQL left join's
+        null result column does not. Call IpSubnetMatch directly (it returns
+        0 for no match and a real row number otherwise) when a caller needs
+        to tell those cases apart.
 
         A normal Table.Join is not sufficient here: equality joins do not
         express IPv4 containment or longest-prefix selection. M therefore
@@ -3384,7 +3416,7 @@ let
         ) as nullable text meta [
             Documentation.Name = "IpSubnetJoin",
             Documentation.Description = "Projects a value from the most-specific matching IPv4 subnet row.",
-            Documentation.LongDescription = "Matches an IPv4 address or subnet against a Power Query table's Subnet column and returns the selected result-column value from the most-specific containing subnet. Best-match mode accepts arbitrary row order; fast mode uses binary search and requires ascending, non-overlapping rows. No match returns null rather than the VBA sentinel Not Found; matched values are converted to text to preserve the reference String boundary.",
+            Documentation.LongDescription = "Matches an IPv4 address or subnet against a Power Query table's Subnet column and returns the selected result-column value from the most-specific containing subnet. Best-match mode accepts arbitrary row order; fast mode uses binary search and requires ascending, non-overlapping rows. No match returns null rather than the VBA sentinel Not Found, and a matched row whose result-column value is itself null also returns null; these two cases are not distinguished. Call IpSubnetMatch directly to tell them apart. Matched values are converted to text to preserve the reference String boundary.",
             Documentation.Examples = {
                 [
                     Description = "Return the value from the most-specific matching subnet.",
@@ -4020,6 +4052,14 @@ let
         errors. Offset zero returns the normalized input network as a one-item
         list.
 
+        No child-count ceiling is enforced. List member expressions are
+        evaluated lazily, so indexing a single child (as in the second example
+        below) stays cheap even for a large offset; materializing the entire
+        list for a large offset is deliberately left to the caller, since that
+        cost is inherent to requesting that many rows rather than a defect in
+        this function. Descending order is generated directly (not via
+        List.Reverse) so that laziness is preserved in both directions.
+
         Examples:
             IpDivideSubnetDoc("1.2.3.0/24", 2)
                 = {"1.2.3.0/26", "1.2.3.64/26", "1.2.3.128/26", "1.2.3.192/26"}
@@ -4073,21 +4113,20 @@ let
             networkValue = Number.IntegerDivide(addressValue, parentBlockSize) * parentBlockSize,
             childBlockSize = Number.Power(2, 32 - checkedTargetPrefixLength),
             childCount = Number.Power(2, checkedOffset),
-            childIndexes = List.Numbers(0, childCount, 1),
-            ascending =
-                List.Transform(
-                    childIndexes,
-                    (childIndex as number) as text =>
-                        IpBinToStr(networkValue + childIndex * childBlockSize)
-                            & "/"
-                            & Number.ToText(checkedTargetPrefixLength, "0", "en-US")
-                ),
-            descendingMode = if descending = null then false else descending
+            descendingMode = if descending = null then false else descending,
+            childIndexes =
+                if descendingMode then
+                    List.Numbers(childCount - 1, childCount, -1)
+                else
+                    List.Numbers(0, childCount, 1)
         in
-            if descendingMode then
-                List.Reverse(ascending)
-            else
-                ascending,
+            List.Transform(
+                childIndexes,
+                (childIndex as number) as text =>
+                    IpBinToStr(networkValue + childIndex * childBlockSize)
+                        & "/"
+                        & Number.ToText(checkedTargetPrefixLength, "0", "en-US")
+            ),
 
     IpDivideSubnetType =
         type function (
