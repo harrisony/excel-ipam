@@ -262,6 +262,26 @@ when a uniform output type is required.
   examples as part of the public contract, but keep parsing, range checks, and
   cross-field validation in the implementation.
 
+### Function documentation metadata contract
+
+- Document a public function by defining types for its parameters, defining a
+  function type, attaching metadata to that type, and applying it with
+  `Value.ReplaceType`. Documentation metadata is host-facing; it does not
+  replace runtime validation or change the function's implementation.
+- Function-level metadata used by this project is `Documentation.Name` (the
+  displayed function name), `Documentation.LongDescription` (the function
+  description), and `Documentation.Examples` (a list of records whose optional
+  text fields are `Description`, `Code`, and `Result`).
+- Parameter-level metadata used by this project is
+  `Documentation.FieldCaption`, `Documentation.FieldDescription`,
+  `Documentation.SampleValues`, and `Documentation.AllowedValues`. The latter
+  two are UI hints; `Documentation.AllowedValues` does not prevent a user from
+  supplying another value in a query.
+- The Microsoft Learn `handling-documentation` article is a reference for
+  these fields, not a routine prerequisite for implementing an IPAM function.
+  Use targeted Microsoft Learn search when this contract is insufficient; do
+  not fetch the entire article merely to confirm these rules.
+
 ## Reference-to-M interpretation
 
 - Use the reference implementations to discover the function inventory,

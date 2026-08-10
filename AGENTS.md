@@ -22,7 +22,11 @@ Before implementing or reviewing an M function:
    needed) to verify M language semantics, native functions, and type behavior.
    Do not use web search, browser search, or direct `learn.microsoft.com` web
    requests for this repository; the Microsoft Learn MCP is the authoritative
-   documentation path.
+   documentation path. For `power-query/handling-documentation`, consult the
+   project notes and targeted search results first. Do not fetch that page just
+   to confirm its documented metadata fields: the MCP fetch returns the entire
+   page even when a fragment such as `#function-types` is supplied. Fetch it
+   only for an unresolved or changed documentation behavior.
 3. Consult the JavaScript and VBA files for intended behavior, not as translation templates.
 4. Inspect dependencies and their Beads. Ask before implementing an unfinished dependency.
 5. Identify the function's semantic operation before writing code (for example,
