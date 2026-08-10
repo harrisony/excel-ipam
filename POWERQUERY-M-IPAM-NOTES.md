@@ -261,6 +261,13 @@ when a uniform output type is required.
   Value.ReplaceType(<FunctionName>, <FunctionName>Type)`. Use the documented
   examples as part of the public contract, but keep parsing, range checks, and
   cross-field validation in the implementation.
+- Create private helpers when they make parsing, validation, normalization,
+  projection, or repeated calculations clearer. Keep them local and give them
+  explicit parameter and return types when that improves correctness or
+  readability. Private helpers do not need `Documentation.*` metadata, a public
+  `Doc` value, or `Value.ReplaceType` unless they are intentionally exposed as
+  part of the library API. Do not add helpers solely to mirror reference
+  control flow or introduce unnecessary indirection.
 
 ### Function documentation metadata contract
 

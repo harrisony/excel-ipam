@@ -4,7 +4,9 @@
 
 This repository converts Excel IP address calculations into a reusable Power Query M library.
 
-- `IpQ_ipv4.m`: Power Query IPv4 implementation.
+- `IpQ_ipv4.m`: Power Query IPv4 implementation. Keep IPv4 functions here.
+- `IpQ_ipv6.m`: Power Query IPv6 implementation. Keep IPv6 functions here;
+  do not add IPv6 functions to `IpQ_ipv4.m`.
 - `ip-calc.js`: JavaScript behavioral reference.
 - `ipcalc_module.bas`: extracted VBA behavioral reference.
 - `POWERQUERY-M-IPAM-NOTES.md`: mandatory project-specific M guidance.
