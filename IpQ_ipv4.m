@@ -419,6 +419,97 @@ let
     IpBuildDoc = Value.ReplaceType(IpBuild, IpBuildType),
 
     /*
+        Compares the first n bits of two IPv4 addresses.
+
+        The VBA reference compares complete octets from left to right and,
+        when n ends inside an octet, compares only that octet's leading bits.
+        This M implementation uses the validated IPv4 integer representation
+        and integer-dividing away the host bits. A zero-bit comparison therefore
+        returns true for any two valid IPv4 addresses.
+
+        The JavaScript reference has no direct public IpComp function. Its
+        IpNet.matchIp and IpNet.matchSubnet operations provide the related
+        subnet-prefix behavior, while this function preserves the VBA API's
+        arbitrary prefix length.
+
+        Examples:
+            IpCompDoc("10.0.0.0", "10.1.0.0", 9) = true
+            IpCompDoc("10.0.0.0", "10.1.0.0", 16) = false
+            IpCompDoc("192.168.1.1", "10.0.0.1", 0) = true
+
+        Unlike VBA's implicit Val conversion, both addresses must be valid
+        dotted-decimal IPv4 text and n must be a whole number from 0 through
+        32. Invalid inputs raise the structured validation errors from
+        IpStrToBin or the explicit prefix validation below.
+    */
+    IpComp = (ip1 as nullable text, ip2 as nullable text, n as nullable number) as logical =>
+        let
+            fail = (message as text, detail as record) as none =>
+                error Error.Record("IpComp.InvalidInput", message, detail),
+
+            prefixLength =
+                if n = null then
+                    fail(
+                        "Prefix length cannot be null.",
+                        [Input = n, Component = "prefix length", Expected = "whole number 0..32"]
+                    )
+                else if n < 0 or n > 32 or Number.RoundDown(n) <> n then
+                    fail(
+                        "Prefix length must be a whole number from 0 through 32.",
+                        [Input = n, Component = "prefix length", Expected = "whole number 0..32"]
+                    )
+                else
+                    n,
+
+            firstAddress = IpStrToBin(ip1),
+            secondAddress = IpStrToBin(ip2),
+            hostBitCount = 32 - prefixLength,
+            divisor = Number.Power(2, hostBitCount),
+            firstPrefix = Number.IntegerDivide(firstAddress, divisor),
+            secondPrefix = Number.IntegerDivide(secondAddress, divisor)
+        in
+            firstPrefix = secondPrefix,
+
+    IpCompType =
+        type function (
+            ip1 as (type nullable text meta [
+                Documentation.Name = "First IPv4 address",
+                Documentation.Description = "A dotted-decimal IPv4 address with four octets."
+            ]),
+            ip2 as (type nullable text meta [
+                Documentation.Name = "Second IPv4 address",
+                Documentation.Description = "A dotted-decimal IPv4 address with four octets."
+            ]),
+            n as (type nullable number meta [
+                Documentation.Name = "Prefix length",
+                Documentation.Description = "The number of leading bits to compare, from 0 through 32."
+            ])
+        ) as logical meta [
+            Documentation.Name = "IpComp",
+            Documentation.Description = "Compares the first n bits of two IPv4 addresses.",
+            Documentation.LongDescription = "Returns true when the first n bits of both validated dotted-decimal IPv4 addresses are equal. Prefix lengths from 0 through 32 are supported; a zero-bit comparison returns true. Invalid addresses or prefix lengths raise structured validation errors.",
+            Documentation.Examples = {
+                [
+                    Description = "Compare a prefix that ends inside the second octet.",
+                    Code = "IpComp(\"10.0.0.0\", \"10.1.0.0\", 9)",
+                    Result = "true"
+                ],
+                [
+                    Description = "Show that the same addresses differ in their first 16 bits.",
+                    Code = "IpComp(\"10.0.0.0\", \"10.1.0.0\", 16)",
+                    Result = "false"
+                ],
+                [
+                    Description = "Compare zero leading bits.",
+                    Code = "IpComp(\"192.168.1.1\", \"10.0.0.1\", 0)",
+                    Result = "true"
+                ]
+            }
+        ],
+
+    IpCompDoc = Value.ReplaceType(IpComp, IpCompType),
+
+    /*
         Returns the prefix length represented by a dotted-decimal IPv4 mask.
 
         A subnet mask is valid when it is the canonical mask for one of the

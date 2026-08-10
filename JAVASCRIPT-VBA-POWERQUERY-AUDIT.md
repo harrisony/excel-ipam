@@ -11,6 +11,7 @@ VBA functions that JavaScript does not expose directly.
 | `IpBinToStr` | `ipNbrToStr` → `_ipFromNbr` | Preserve four-octet formatting for whole numbers in 0..4294967295. M rejects null, fractional, negative, and out-of-range values explicitly. |
 | `IpParse` | No direct public counterpart | Preserve the VBA right-to-left fragment operation, returning `[Byte, Remainder]` because M has no `ByRef` mutation. |
 | `IpBuild` | No direct public counterpart; related to `_ipFromNbr` | Preserve low-byte/carry behavior, returning `[Ip, Carry]` as an immutable M record. |
+| `IpComp` | No direct public counterpart; related to `IpNet.matchIp`/`matchSubnet` | Preserve the VBA arbitrary-prefix comparison with a typed M text/text/number contract. M parses each IPv4 address once, compares the leading prefix by integer-dividing away host bits, and rejects null, malformed addresses, and prefix lengths outside 0..32 instead of inheriting VBA/JavaScript coercion. |
 | `IpMaskLen` | `ipMaskLen` | Return 0..32 only for canonical contiguous masks. This deliberately rejects non-contiguous masks instead of JavaScript's last-one-bit interpretation. |
 | `IpSubnetParse` | Related `IpNet` parsing | Preserve the VBA parser contract: return address text and prefix length without silently normalizing host bits. Network normalization belongs to a separate operation. |
 
