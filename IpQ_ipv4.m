@@ -210,6 +210,108 @@ let
     IpBinToStrDoc = Value.ReplaceType(IpBinToStr, IpBinToStrType),
 
     /*
+        Parses the rightmost byte from an IPv4 address fragment.
+
+        The VBA reference removes the rightmost dot-delimited component from
+        its ByRef input and returns that component as an integer. M values are
+        immutable, so this version returns both values in a record. The
+        remainder is an empty text value when the input has no dot.
+
+        Unlike VBA's permissive Val conversion, the M contract requires the
+        extracted component to be a non-empty ASCII decimal integer from 0
+        through 255. Earlier components remain in Remainder for a subsequent
+        parse, matching the reference's right-to-left iteration model.
+
+        Examples:
+            IpParseDoc("192.168.1.32")
+                = [Byte = 32, Remainder = "192.168.1"]
+            IpParseDoc("32")
+                = [Byte = 32, Remainder = ""]
+    */
+    IpParse = (ip as nullable text) as record =>
+        let
+            fail = (message as text, detail as record) as none =>
+                error Error.Record("IpParse.InvalidInput", message, detail),
+
+            checkedIp =
+                if ip = null then
+                    fail(
+                        "IPv4 address fragment cannot be null.",
+                        [Input = ip, Component = "address fragment", Expected = "text"]
+                    )
+                else
+                    ip,
+            separatorPosition = Text.PositionOf(checkedIp, ".", Occurrence.Last),
+            byteText =
+                if separatorPosition < 0 then
+                    checkedIp
+                else
+                    Text.Range(checkedIp, separatorPosition + 1),
+            remainder =
+                if separatorPosition < 0 then
+                    ""
+                else
+                    Text.Start(checkedIp, separatorPosition),
+            asciiDigits = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"},
+            containsOnlyDigits = byteText <> "" and Text.Select(byteText, asciiDigits) = byteText,
+            byteValue =
+                if containsOnlyDigits then
+                    Number.FromText(byteText, "en-US")
+                else
+                    null,
+            isValidByte =
+                if not containsOnlyDigits then
+                    false
+                else
+                    byteValue >= 0
+                        and byteValue <= 255
+                        and Number.RoundDown(byteValue) = byteValue
+        in
+            if isValidByte then
+                [Byte = byteValue, Remainder = remainder]
+            else
+                fail(
+                    "IPv4 byte must be an ASCII decimal integer from 0 through 255.",
+                    [
+                        Input = ip,
+                        Component = "byte",
+                        Value = byteText,
+                        Expected = "0..255"
+                    ]
+                ),
+
+    IpParseType =
+        type function (
+            ip as (type nullable text meta [
+                Documentation.Name = "IPv4 address fragment",
+                Documentation.Description = "An IPv4 address or partial address whose rightmost byte is parsed."
+            ])
+        ) as record meta [
+            Documentation.Name = "IpParse",
+            Documentation.Description = "Parses and removes the rightmost byte from an IPv4 address fragment.",
+            Documentation.LongDescription = "Returns a record containing Byte and Remainder fields. The input is processed from right to left; Remainder is the text before the final dot, or an empty text value when no dot is present. The extracted byte must be an ASCII decimal integer from 0 through 255.",
+            Documentation.Examples = {
+                [
+                    Description = "Parse the rightmost byte and retain the preceding address fragment.",
+                    Code = "IpParse(\"192.168.1.32\")",
+                    Result = "[Byte = 32, Remainder = \"192.168.1\"]"
+                ],
+                [
+                    Description = "Parse a single byte with no preceding address fragment.",
+                    Code = "IpParse(\"32\")",
+                    Result = "[Byte = 32, Remainder = \"\"]"
+                ],
+                [
+                    Description = "Parse the largest valid IPv4 byte.",
+                    Code = "IpParse(\"255\")",
+                    Result = "[Byte = 255, Remainder = \"\"]"
+                ]
+            }
+        ],
+
+    IpParseDoc = Value.ReplaceType(IpParse, IpParseType),
+
+    /*
         Returns the prefix length represented by a dotted-decimal IPv4 mask.
 
         A subnet mask is valid when it is the canonical mask for one of the
@@ -415,6 +517,7 @@ in
     [
         IpStrToBin = IpStrToBinDoc,
         IpBinToStr = IpBinToStrDoc,
+        IpParse = IpParseDoc,
         IpMaskLen = IpMaskLenDoc,
         IpSubnetParse = IpSubnetParseDoc
     ]
