@@ -23,7 +23,7 @@ Power Query references:
 
 ## Standalone Power Query design guidance
 
-- See [Power Query M IPAM build notes](POWERQUERY-M-IPAM-NOTES.md) for the extracted implementation nuggets and source links.
+- Before implementing or reviewing any Power Query M function, read [Power Query M IPAM build notes](POWERQUERY-M-IPAM-NOTES.md) and apply its relevant guidance. Treat it as project-specific implementation policy, not optional background material; document deliberate deviations in the implementation or focused validation.
 - Prefer idiomatic, readable, maintainable Power Query M and established M best practices. Use the VBA and JavaScript implementations as behavioral references. Preserve their intended IPAM semantics and documented examples, while designing idiomatic Power Query M contracts and correcting implementation artifacts or inconsistencies where appropriate.
 - M `number` arithmetic and equality use double precision by default. IPv4 integers, octets, masks, and prefix lengths are safe as numbers, but IPv6 must not be represented as one numeric value. Prefer text at public boundaries and a list of bytes or `binary` internally; use records for parsed address/subnet state.
 - `null` is distinct from false and zero: `null = null` is true, while arithmetic and relational operations involving `null` generally yield `null`. Make validation and fallback behavior explicit.
