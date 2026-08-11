@@ -278,7 +278,8 @@ when a uniform output type is required.
 - Function-level metadata used by this project is `Documentation.Name` (the
   displayed function name), `Documentation.LongDescription` (the function
   description), and `Documentation.Examples` (a list of records whose optional
-  text fields are `Description`, `Code`, and `Result`).
+  text fields are `Description`, `Code`, and `Result`). Microsoft Learn does not
+  define a function-level `Documentation.Description` field; do not emit it.
 - Parameter-level metadata used by this project is
   `Documentation.FieldCaption`, `Documentation.FieldDescription`,
   `Documentation.SampleValues`, and `Documentation.AllowedValues`. The latter
@@ -301,6 +302,12 @@ when a uniform output type is required.
 - Prefer one consistent library-wide contract over reproducing inconsistent
   behavior between reference functions.
 - For ambiguous behavior, document the chosen rule and add boundary tests.
+- Validation error precedence is specified only where an implementation creates
+  an explicit dependency between checks. When multiple independent arguments
+  are invalid, M's dependency-driven evaluation does not define which error is
+  observed first; callers and tests must not depend on a particular precedence.
+  Test one invalid component at a time unless a public function explicitly
+  documents an ordered validation contract.
 
 ## Control-flow nuggets
 

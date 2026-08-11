@@ -1,34 +1,46 @@
-/*
-    Converts a dotted-decimal IPv4 address to its base-256 integer form.
-
-    The VBA reference accumulates one value for each dot-delimited segment:
-
-        result = result * 256 + octet
-
-    This M version makes the input contract explicit. It accepts exactly four
-    ASCII decimal octets, each in the inclusive range 0..255. Leading zeroes
-    are accepted because they do not change the numeric value.
-
-    The JavaScript counterpart is ipStrToNbr, implemented through _ipToNbr;
-    both use the same base-256 accumulation for valid IPv4 input. M rejects
-    malformed or out-of-range input explicitly instead of inheriting
-    JavaScript's numeric coercion behavior.
-
-    Example:
-        IpStrToBinDoc("1.2.3.4") = 16909060
-*/
 let
+    /* Private validation helpers shared by IPv4 functions. */
+    IpIsAsciiDigits = (value as text) as logical =>
+        value <> "" and Text.Select(value, {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}) = value,
+
+    /* Creates a validation failure function while keeping each caller's public Reason explicit. */
+    IpMakeFailure = (reason as text) as function =>
+        (message as text, detail as record) as none =>
+            error Error.Record(reason, message, detail),
+
+    /*
+        Converts a dotted-decimal IPv4 address to its base-256 integer form.
+
+        The VBA reference accumulates one value for each dot-delimited segment:
+
+            result = result * 256 + octet
+
+        This M version makes the input contract explicit. It accepts exactly four
+        ASCII decimal octets, each in the inclusive range 0..255. Leading zeroes
+        are accepted because they do not change the numeric value.
+
+        The JavaScript counterpart is ipStrToNbr, implemented through _ipToNbr;
+        both use the same base-256 accumulation for valid IPv4 input. M rejects
+        malformed or out-of-range input explicitly instead of inheriting
+        JavaScript's numeric coercion behavior.
+
+        Example:
+            IpStrToBinDoc("1.2.3.4") = 16909060
+    */
     IpStrToBin = (ip as nullable text) as number =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpStrToBin.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpStrToBin.InvalidInput"),
 
             parseOctet = (octet as text, position as number) as number =>
                 let
-                    asciiDigits = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"},
-                    containsOnlyDigits = octet <> "" and Text.Select(octet, asciiDigits) = octet,
+                    containsOnlyDigits = IpIsAsciiDigits(octet),
                     parsed =
-                        if containsOnlyDigits then
+                        if octet = "" then
+                            fail(
+                                "IPv4 octets cannot be empty.",
+                                [Input = ip, Component = "octet", Position = position, Value = octet, Expected = "non-empty ASCII decimal octet"]
+                            )
+                        else if containsOnlyDigits then
                             Number.FromText(octet, "en-US")
                         else
                             null,
@@ -94,7 +106,6 @@ let
             ])
         ) as number meta [
             Documentation.Name = "IpStrToBin",
-            Documentation.Description = "Converts a dotted-decimal IPv4 address to its base-256 integer representation.",
             Documentation.LongDescription = "Returns the IPv4 address as a number in the range 0 through 4294967295. The input must contain exactly four ASCII decimal octets in the range 0 through 255.",
             Documentation.Examples = {
                 [
@@ -133,8 +144,7 @@ let
     */
     IpBinToStr = (ip as nullable number) as text =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpBinToStr.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpBinToStr.InvalidInput"),
 
             checkedIp =
                 if ip = null then
@@ -195,7 +205,6 @@ let
            ])
         ) as text meta [
             Documentation.Name = "IpBinToStr",
-            Documentation.Description = "Converts an IPv4 integer to dotted-decimal text.",
             Documentation.LongDescription = "Returns a four-octet IPv4 address for an integer in the range 0 through 4294967295.",
             Documentation.Examples = {
                 [
@@ -259,7 +268,6 @@ let
            ])
         ) as logical meta [
             Documentation.Name = "IpIsValid",
-            Documentation.Description = "Tests whether text is a canonical dotted-decimal IPv4 address.",
             Documentation.LongDescription = "Returns true only when the input is exactly four ASCII decimal IPv4 octets in canonical dotted-decimal form. Null, malformed, out-of-range, leading-zero, and whitespace-containing inputs return false rather than raising an error.",
             Documentation.Examples = {
                 [
@@ -306,18 +314,9 @@ let
         let
             addressValue = IpStrToBin(ip),
             privateRanges = {
-                [
-                    Network = IpStrToBin("10.0.0.0"),
-                    BlockSize = Number.Power(2, 24)
-                ],
-                [
-                    Network = IpStrToBin("172.16.0.0"),
-                    BlockSize = Number.Power(2, 20)
-                ],
-                [
-                    Network = IpStrToBin("192.168.0.0"),
-                    BlockSize = Number.Power(2, 16)
-                ]
+                [Network = 167772160, BlockSize = 16777216],
+                [Network = 2886729728, BlockSize = 1048576],
+                [Network = 3232235520, BlockSize = 65536]
             },
             isInPrivateRange = (privateRange as record) as logical =>
                 addressValue >= privateRange[Network]
@@ -333,7 +332,6 @@ let
            ])
         ) as logical meta [
             Documentation.Name = "IpIsPrivate",
-            Documentation.Description = "Tests whether an IPv4 address is in an RFC 1918 private range.",
             Documentation.LongDescription = "Returns true for addresses in 10.0.0.0/8, 172.16.0.0/12, or 192.168.0.0/16. Null and malformed inputs raise structured validation errors; leading-zero octets are accepted for numeric membership testing.",
             Documentation.Examples = {
                 [
@@ -377,8 +375,7 @@ let
     */
     IpParse = (ip as nullable text) as record =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpParse.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpParse.InvalidInput"),
 
             checkedIp =
                 if ip = null then
@@ -399,8 +396,7 @@ let
                     ""
                 else
                     Text.Start(checkedIp, separatorPosition),
-            asciiDigits = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"},
-            containsOnlyDigits = byteText <> "" and Text.Select(byteText, asciiDigits) = byteText,
+            containsOnlyDigits = IpIsAsciiDigits(byteText),
             byteValue =
                 if containsOnlyDigits then
                     Number.FromText(byteText, "en-US")
@@ -435,7 +431,6 @@ let
            ])
         ) as [Byte = number, Remainder = text] meta [
             Documentation.Name = "IpParse",
-            Documentation.Description = "Parses and removes the rightmost byte from an IPv4 address fragment.",
             Documentation.LongDescription = "Returns a record containing Byte and Remainder fields. The input is processed from right to left; Remainder is the text before the final dot, or an empty text value when no dot is present. The extracted byte must be an ASCII decimal integer from 0 through 255.",
             Documentation.Examples = {
                 [
@@ -477,13 +472,14 @@ let
                 = [Subnet = "10.0.0.0/24", NextHop = " 1.2.3.4"]
             IpParseRouteDoc("10.0.0.0 255.255.255.0 next hop")
                 = [Subnet = "10.0.0.0 255.255.255.0", NextHop = " next hop"]
-            IpParseRouteDoc("10.0.0.0/32")
-                = [Subnet = "10.0.0.0/32", NextHop = ""]
+            IpParseRouteDoc("10.0.0.1 gw")
+                = [Subnet = "10.0.0.1", NextHop = " gw"]
+            IpParseRouteDoc("10.0.0.0 ")
+                = [Subnet = "10.0.0.0", NextHop = ""]
     */
     IpParseRoute = (route as nullable text) as [Subnet = text, NextHop = text] =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpParseRoute.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpParseRoute.InvalidInput"),
 
             checkedRoute =
                 if route = null then
@@ -493,38 +489,34 @@ let
                     )
                 else
                     route,
-            slashPosition = Text.PositionOf(checkedRoute, "/"),
-            firstSpacePosition = Text.PositionOf(checkedRoute, " "),
-            textAfterFirstSpace =
-                if firstSpacePosition < 0 then
-                    ""
-                else
-                    Text.Range(checkedRoute, firstSpacePosition + 1),
-            secondSpaceRelativePosition =
-                if firstSpacePosition < 0 then
-                    -1
-                else
-                    Text.PositionOf(textAfterFirstSpace, " "),
-            secondSpacePosition =
-                if secondSpaceRelativePosition < 0 then
-                    -1
-                else
-                    firstSpacePosition + 1 + secondSpaceRelativePosition,
+            trimmedRoute = Text.Trim(checkedRoute),
+            firstSpacePosition = Text.PositionOf(trimmedRoute, " "),
+            firstToken = if firstSpacePosition < 0 then trimmedRoute else Text.Start(trimmedRoute, firstSpacePosition),
+            slashPosition = Text.PositionOf(trimmedRoute, "/"),
+            slashInFirstToken = Text.PositionOf(firstToken, "/") >= 0,
+            afterFirstDelimiter = if firstSpacePosition < 0 then "" else Text.Range(trimmedRoute, firstSpacePosition),
+            maskLeadingWhitespace = Text.Length(afterFirstDelimiter) - Text.Length(Text.TrimStart(afterFirstDelimiter)),
+            textAfterFirstSpace = Text.TrimStart(afterFirstDelimiter),
+            secondSpaceRelativePosition = Text.PositionOf(textAfterFirstSpace, " "),
+            secondToken = if secondSpaceRelativePosition < 0 then textAfterFirstSpace else Text.Start(textAfterFirstSpace, secondSpaceRelativePosition),
+            parsedDottedMask = try IpMaskLen(secondToken),
+            isDottedMaskRoute = secondToken <> "" and not parsedDottedMask[HasError],
             splitPosition =
-                if slashPosition < 0 and firstSpacePosition >= 0 then
-                    secondSpacePosition
+                if slashPosition >= 0 and not slashInFirstToken then
+                    fail(
+                        "CIDR prefix must be attached to the route address; mixed or slash-after-space notation is invalid.",
+                        [Input = route, Component = "route", Expected = "address/prefix [next hop] or address mask [next hop]"]
+                    )
+                else if firstSpacePosition < 0 then
+                    -1
+                else if slashInFirstToken or not isDottedMaskRoute then
+                    firstSpacePosition
+                else if secondSpaceRelativePosition < 0 then
+                    -1
                 else
-                    firstSpacePosition,
-            subnet =
-                if splitPosition < 0 then
-                    checkedRoute
-                else
-                    Text.Start(checkedRoute, splitPosition),
-            nextHop =
-                if splitPosition < 0 then
-                    ""
-                else
-                    Text.Range(checkedRoute, splitPosition)
+                    firstSpacePosition + maskLeadingWhitespace + Text.Length(secondToken),
+            subnet = if splitPosition < 0 then trimmedRoute else Text.Start(trimmedRoute, splitPosition),
+            nextHop = if splitPosition < 0 then "" else Text.Range(trimmedRoute, splitPosition)
         in
             [Subnet = subnet, NextHop = nextHop],
 
@@ -536,8 +528,7 @@ let
            ])
         ) as [Subnet = text, NextHop = text] meta [
             Documentation.Name = "IpParseRoute",
-            Documentation.Description = "Splits route text into subnet and next-hop fields.",
-            Documentation.LongDescription = "Returns a [Subnet, NextHop] record. CIDR route text splits at its first space; dotted-mask route text splits at its second space so the address and mask remain together. NextHop retains the delimiter-leading suffix, and the returned Subnet text is not validated by this projection helper.",
+            Documentation.LongDescription = "Returns a [Subnet, NextHop] record. CIDR and unmasked host routes split before an optional next hop; dotted-mask route text keeps the address and validated mask together. Leading and trailing route whitespace is trimmed, NextHop retains its delimiter-leading suffix, and a separated CIDR prefix is rejected.",
             Documentation.Examples = {
                 [
                     Description = "Split a CIDR route and next hop.",
@@ -550,9 +541,9 @@ let
                     Result = "[Subnet = \"10.0.0.0 255.255.255.0\", NextHop = \" next hop\"]"
                 ],
                 [
-                    Description = "Return an empty next hop when none is present.",
-                    Code = "IpParseRoute(\"10.0.0.0/32\")",
-                    Result = "[Subnet = \"10.0.0.0/32\", NextHop = \"\"]"
+                    Description = "Split an unmasked host route from its next hop.",
+                    Code = "IpParseRoute(\"10.0.0.1 gw\")",
+                    Result = "[Subnet = \"10.0.0.1\", NextHop = \" gw\"]"
                 ]
             }
         ],
@@ -586,8 +577,7 @@ let
     */
     IpFindOverlappingSubnets = (subnets as nullable list) as list =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpFindOverlappingSubnets.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpFindOverlappingSubnets.InvalidInput"),
 
             checkedSubnets =
                 if subnets = null then
@@ -608,26 +598,31 @@ let
                                     if not Value.Is(rawSubnet, type text) then
                                         fail(
                                             "Subnet list items must be text.",
-                                            [Input = rawSubnet, Component = "subnet", Expected = "text"]
+                                            [Input = rawSubnet, Component = "subnet", Row = position + 1, Expected = "text"]
                                         )
                                     else if rawSubnet = "" then
                                         fail(
                                             "Subnet list items cannot be empty.",
-                                            [Input = rawSubnet, Component = "subnet", Expected = "IPv4 subnet text"]
+                                            [Input = rawSubnet, Component = "subnet", Row = position + 1, Expected = "IPv4 subnet text"]
                                         )
                                     else
                                         rawSubnet,
-                                parsedSubnet = IpSubnetParseWithAddressValue(checkedSubnet),
-                                addressValue = parsedSubnet[AddressValue],
-                                prefixLength = parsedSubnet[PrefixLength],
-                                blockSize = Number.Power(2, 32 - prefixLength),
-                                networkKey = Number.IntegerDivide(addressValue, blockSize) * blockSize
+                                parsedSubnetAttempt = try IpSubnetParseWithAddressValue(checkedSubnet, "IpFindOverlappingSubnets.InvalidInput"),
+                                parsedSubnet =
+                                    if parsedSubnetAttempt[HasError] then
+                                        fail(
+                                            "Subnet list item is not a valid IPv4 subnet.",
+                                            [Input = checkedSubnet, Component = "subnet", Row = position + 1, Cause = parsedSubnetAttempt[Error]]
+                                        )
+                                    else
+                                        parsedSubnetAttempt[Value],
+                                facts = parsedSubnet[Facts]
                             in
                                 [
                                     Original = checkedSubnet,
-                                    NetworkKey = networkKey,
-                                    PrefixLength = prefixLength,
-                                    BlockSize = blockSize
+                                    NetworkKey = facts[NetworkKey],
+                                    PrefixLength = facts[PrefixLength],
+                                    BlockSize = facts[BlockSize]
                                 ]
                     )
                 ),
@@ -638,18 +633,20 @@ let
             findContainingSubnet = (position as number) as text =>
                 let
                     candidate = subnetRecords{position},
-                    containingPositions =
-                        List.Select(
+                    containingPosition =
+                        List.PositionOf(
                             List.Positions(subnetRecords),
-                            (otherPosition as number) as logical =>
+                            true,
+                            Occurrence.First,
+                            (otherPosition as number, _ as logical) as logical =>
                                 otherPosition <> position
                                     and contains(candidate, subnetRecords{otherPosition})
                         )
                 in
-                    if List.IsEmpty(containingPositions) then
+                    if containingPosition < 0 then
                         ""
                     else
-                        subnetRecords{containingPositions{0}}[Original],
+                        subnetRecords{containingPosition}[Original],
             result =
                 List.Transform(
                     List.Positions(subnetRecords),
@@ -666,7 +663,6 @@ let
            ])
         ) as list meta [
             Documentation.Name = "IpFindOverlappingSubnets",
-            Documentation.Description = "Returns the first containing subnet for each overlapping row.",
             Documentation.LongDescription = "Scans an ordered Power Query list of IPv4 subnet text and returns a same-length text list. For each row, the first other row whose subnet contains it is returned using the original text; rows with no containing subnet return an empty text value. Duplicate normalized subnets count as overlaps. Null or empty lists/items, non-text values, and malformed subnets raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -710,8 +706,7 @@ let
     */
     IpBuild = (ipByte as nullable number, ip as nullable text) as record =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpBuild.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpBuild.InvalidInput"),
 
             checkedIpByte =
                 if ipByte = null then
@@ -764,7 +759,6 @@ let
            ])
         ) as [Ip = text, Carry = number] meta [
             Documentation.Name = "IpBuild",
-            Documentation.Description = "Prepends the low byte of a number to an IPv4 address fragment and returns the remaining carry.",
             Documentation.LongDescription = "Returns a record with Ip and Carry fields. Ip contains the low eight bits followed by the original fragment, and Carry is the integer quotient after division by 256. This record is the immutable M equivalent of the VBA function's ByRef string and numeric return value.",
             Documentation.Examples = {
                 [
@@ -809,27 +803,29 @@ let
     */
     IpAdd = (ip as nullable text, offset as nullable number) as text =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpAdd.InvalidInput", message, detail),
-
-            checkedOffset =
-                if offset = null then
-                    fail(
-                        "IPv4 offset cannot be null.",
-                        [Input = offset, Component = "offset", Expected = "signed whole number"]
-                    )
-                else if Number.RoundDown(offset) <> offset then
-                    fail(
-                        "IPv4 offset must be a whole number.",
-                        [Input = offset, Component = "offset", Expected = "signed whole number"]
-                    )
-                else
-                    offset,
-
-            addressValue = IpStrToBin(ip),
-            resultValue = addressValue + checkedOffset
+            fail = IpMakeFailure("IpAdd.InvalidInput")
         in
-            IpBinToStr(resultValue),
+            if offset = null then
+                fail(
+                    "IPv4 offset cannot be null.",
+                    [Input = offset, Component = "offset", Expected = "signed whole number"]
+                )
+            else if Number.Abs(offset) > Number.Power(2, 53) - 1 then
+                fail(
+                    "IPv4 offset must be within M's exact whole-number range.",
+                    [Input = offset, Component = "offset", Expected = "signed whole number from -(2^53-1) through 2^53-1"]
+                )
+            else if Number.RoundDown(offset) <> offset then
+                fail(
+                    "IPv4 offset must be a whole number.",
+                    [Input = offset, Component = "offset", Expected = "signed whole number"]
+                )
+            else
+                let
+                    addressValue = IpStrToBin(ip),
+                    resultValue = addressValue + offset
+                in
+                    IpBinToStr(resultValue),
 
     IpAddType =
         type function (
@@ -843,8 +839,7 @@ let
            ])
         ) as text meta [
             Documentation.Name = "IpAdd",
-            Documentation.Description = "Adds a signed offset to an IPv4 address.",
-            Documentation.LongDescription = "Adds a signed whole-number offset to a validated IPv4 address and returns dotted-decimal text. The result must remain in the range 0 through 4294967295; null, fractional, malformed, and out-of-range inputs raise structured validation errors.",
+            Documentation.LongDescription = "Adds a signed whole-number offset within M's exact integer range to a validated IPv4 address and returns dotted-decimal text. The result must remain in the range 0 through 4294967295; null, fractional, inexact, malformed, and out-of-range inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
                     Description = "Add four addresses.",
@@ -897,7 +892,6 @@ let
            ])
         ) as text meta [
             Documentation.Name = "IpAdd2",
-            Documentation.Description = "Adds a signed offset to an IPv4 address using the alternate compatibility name.",
             Documentation.LongDescription = "Preserves the VBA IpAdd2 function name while using the shared IpAdd contract. Adds a signed whole-number offset to a validated IPv4 address; the result must remain in the range 0 through 4294967295. Null, fractional, malformed, and out-of-range inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -946,8 +940,7 @@ let
     */
     IpComp = (ip1 as nullable text, ip2 as nullable text, n as nullable number) as logical =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpComp.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpComp.InvalidInput"),
 
             prefixLength =
                 if n = null then
@@ -988,7 +981,6 @@ let
            ])
         ) as logical meta [
             Documentation.Name = "IpComp",
-            Documentation.Description = "Compares the first n bits of two IPv4 addresses.",
             Documentation.LongDescription = "Returns true when the first n bits of both validated dotted-decimal IPv4 addresses are equal. Prefix lengths from 0 through 32 are supported; a zero-bit comparison returns true. Invalid addresses or prefix lengths raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -1053,7 +1045,6 @@ let
            ])
         ) as text meta [
             Documentation.Name = "IpAnd",
-            Documentation.Description = "Performs a bitwise AND on two IPv4 addresses.",
             Documentation.LongDescription = "Returns the dotted-decimal IPv4 result of applying bitwise AND to two validated IPv4 addresses. Both operands are generic IPv4 values; the second operand is not required to be a canonical subnet mask. Invalid or null inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -1117,7 +1108,6 @@ let
            ])
         ) as text meta [
             Documentation.Name = "IpOr",
-            Documentation.Description = "Performs a bitwise OR on two IPv4 addresses.",
             Documentation.LongDescription = "Returns the dotted-decimal IPv4 result of applying bitwise OR to two validated IPv4 addresses. Both operands are generic IPv4 values; the second operand is not required to be a canonical subnet mask. Invalid or null inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -1181,7 +1171,6 @@ let
            ])
         ) as text meta [
             Documentation.Name = "IpXor",
-            Documentation.Description = "Performs a bitwise XOR on two IPv4 addresses.",
             Documentation.LongDescription = "Returns the dotted-decimal IPv4 result of applying bitwise XOR to two validated IPv4 addresses. Both operands are generic IPv4 values; the second operand is not required to be a canonical subnet mask. Invalid or null inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -1239,7 +1228,6 @@ let
            ])
         ) as number meta [
             Documentation.Name = "IpDiff",
-            Documentation.Description = "Returns the signed difference between two IPv4 addresses.",
             Documentation.LongDescription = "Subtracts the numeric representation of the second validated IPv4 address from the first and returns the signed difference in address units. Invalid or null inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -1261,6 +1249,14 @@ let
         ],
 
     IpDiffDoc = Value.ReplaceType(IpDiff, IpDiffType),
+
+    /* Converts a validated IPv4 integer to four left-to-right octets. */
+    IpAddressValueToOctets = (addressValue as number) as list =>
+        List.Transform(
+            {3, 2, 1, 0},
+            (power as number) as number =>
+                Number.Mod(Number.IntegerDivide(addressValue, Number.Power(256, power)), 256)
+        ),
 
     /*
         Replaces one 1-based IPv4 octet from left to right.
@@ -1287,56 +1283,41 @@ let
         newValue as nullable number
     ) as text =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpSetByte.InvalidInput", message, detail),
-
-            checkedPosition =
-                if position = null then
-                    fail(
-                        "IPv4 octet position cannot be null.",
-                        [Input = position, Component = "position", Expected = "whole number 1..4"]
-                    )
-                else if position < 1 or position > 4 or Number.RoundDown(position) <> position then
-                    fail(
-                        "IPv4 octet position must be a whole number from 1 through 4.",
-                        [Input = position, Component = "position", Expected = "whole number 1..4"]
-                    )
-                else
-                    position,
-
-            checkedValue =
-                if newValue = null then
-                    fail(
-                        "Replacement IPv4 octet cannot be null.",
-                        [Input = newValue, Component = "newValue", Expected = "whole number 0..255"]
-                    )
-                else if newValue < 0 or newValue > 255 or Number.RoundDown(newValue) <> newValue then
-                    fail(
-                        "Replacement IPv4 octet must be a whole number from 0 through 255.",
-                        [Input = newValue, Component = "newValue", Expected = "whole number 0..255"]
-                    )
-                else
-                    newValue,
-
-            addressValue = IpStrToBin(ip),
-            octets =
-                List.Transform(
-                    {3, 2, 1, 0},
-                    (power as number) as number =>
-                        Number.Mod(
-                            Number.IntegerDivide(addressValue, Number.Power(256, power)),
-                            256
-                        )
-                ),
-            replacedOctets = List.ReplaceRange(octets, checkedPosition - 1, 1, {checkedValue})
+            fail = IpMakeFailure("IpSetByte.InvalidInput")
         in
-            Text.Combine(
-                List.Transform(
-                    replacedOctets,
-                    (octet as number) as text => Number.ToText(octet, "0", "en-US")
-                ),
-                "."
-            ),
+            if position = null then
+                fail(
+                    "IPv4 octet position cannot be null.",
+                    [Input = position, Component = "position", Expected = "whole number 1..4"]
+                )
+            else if position < 1 or position > 4 or Number.RoundDown(position) <> position then
+                fail(
+                    "IPv4 octet position must be a whole number from 1 through 4.",
+                    [Input = position, Component = "position", Expected = "whole number 1..4"]
+                )
+            else if newValue = null then
+                fail(
+                    "Replacement IPv4 octet cannot be null.",
+                    [Input = newValue, Component = "newValue", Expected = "whole number 0..255"]
+                )
+            else if newValue < 0 or newValue > 255 or Number.RoundDown(newValue) <> newValue then
+                fail(
+                    "Replacement IPv4 octet must be a whole number from 0 through 255.",
+                    [Input = newValue, Component = "newValue", Expected = "whole number 0..255"]
+                )
+            else
+                let
+                    addressValue = IpStrToBin(ip),
+                    octets = IpAddressValueToOctets(addressValue),
+                    replacedOctets = List.ReplaceRange(octets, position - 1, 1, {newValue})
+                in
+                    Text.Combine(
+                        List.Transform(
+                            replacedOctets,
+                            (octet as number) as text => Number.ToText(octet, "0", "en-US")
+                        ),
+                        "."
+                    ),
 
     IpSetByteType =
         type function (
@@ -1354,7 +1335,6 @@ let
            ])
         ) as text meta [
             Documentation.Name = "IpSetByte",
-            Documentation.Description = "Replaces one octet in an IPv4 address.",
             Documentation.LongDescription = "Replaces the one-based octet at position 1 through 4 in a validated IPv4 address and returns canonical dotted-decimal text. Null, malformed, fractional, and out-of-range inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -1401,35 +1381,20 @@ let
         position as nullable number
     ) as number =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpGetByte.InvalidInput", message, detail),
-
-            checkedPosition =
-                if position = null then
-                    fail(
-                        "IPv4 octet position cannot be null.",
-                        [Input = position, Component = "position", Expected = "whole number 1..4"]
-                    )
-                else if position < 1 or position > 4 or Number.RoundDown(position) <> position then
-                    fail(
-                        "IPv4 octet position must be a whole number from 1 through 4.",
-                        [Input = position, Component = "position", Expected = "whole number 1..4"]
-                    )
-                else
-                    position,
-
-            addressValue = IpStrToBin(ip),
-            octets =
-                List.Transform(
-                    {3, 2, 1, 0},
-                    (power as number) as number =>
-                        Number.Mod(
-                            Number.IntegerDivide(addressValue, Number.Power(256, power)),
-                            256
-                        )
-                )
+            fail = IpMakeFailure("IpGetByte.InvalidInput")
         in
-            octets{checkedPosition - 1},
+            if position = null then
+                fail(
+                    "IPv4 octet position cannot be null.",
+                    [Input = position, Component = "position", Expected = "whole number 1..4"]
+                )
+            else if position < 1 or position > 4 or Number.RoundDown(position) <> position then
+                fail(
+                    "IPv4 octet position must be a whole number from 1 through 4.",
+                    [Input = position, Component = "position", Expected = "whole number 1..4"]
+                )
+            else
+                IpAddressValueToOctets(IpStrToBin(ip)){position - 1},
 
     IpGetByteType =
         type function (
@@ -1443,7 +1408,6 @@ let
            ])
         ) as number meta [
             Documentation.Name = "IpGetByte",
-            Documentation.Description = "Returns one octet from an IPv4 address.",
             Documentation.LongDescription = "Returns the one-based octet at position 1 through 4 in a validated IPv4 address. Null, malformed, fractional, and out-of-range inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -1493,8 +1457,7 @@ let
         optional descending as nullable logical
     ) as list =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpSortArray.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpSortArray.InvalidInput"),
 
             checkedAddresses =
                 if addresses = null then
@@ -1515,11 +1478,10 @@ let
                         else
                             true
                 ),
-            bufferedAddresses = List.Buffer(nonEmptyAddresses),
             parsedAddresses =
                 List.Buffer(
                     List.Transform(
-                        bufferedAddresses,
+                        nonEmptyAddresses,
                         (rawAddress as any) as number =>
                             if not Value.Is(rawAddress, type text) then
                                 fail(
@@ -1530,7 +1492,7 @@ let
                                 IpStrToBin(rawAddress)
                     )
                 ),
-            descendingMode = if descending = null then false else descending,
+            descendingMode = descending ?? false,
             sortedAddresses =
                 List.Sort(
                     parsedAddresses,
@@ -1551,7 +1513,6 @@ let
            ])
         ) as list meta [
             Documentation.Name = "IpSortArray",
-            Documentation.Description = "Sorts a list of IPv4 addresses numerically.",
             Documentation.LongDescription = "Sorts a Power Query list of IPv4 address text by numeric address value and returns canonical dotted-decimal text. Null and empty text items are ignored, non-text or malformed address items raise structured validation errors, and a null descending value means ascending order.",
             Documentation.Examples = {
                 [
@@ -1608,7 +1569,6 @@ let
            ])
         ) as text meta [
             Documentation.Name = "IpInvertMask",
-            Documentation.Description = "Inverts all bits in an IPv4 mask or wildcard mask.",
             Documentation.LongDescription = "Returns the 32-bit complement of a validated dotted-decimal IPv4 value. This converts canonical subnet masks to wildcard masks and wildcard masks to subnet masks, while also accepting non-contiguous bit patterns as generic IPv4 values. Null or malformed inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -1631,6 +1591,98 @@ let
 
     IpInvertMaskDoc = Value.ReplaceType(IpInvertMask, IpInvertMaskType),
 
+    /* Returns normalized numeric facts shared by subnet-list operations. */
+    IpSubnetFacts = (addressValue as number, prefixLength as number) as [NetworkKey = number, PrefixLength = number, BlockSize = number] =>
+        let
+            blockSize = Number.Power(2, 32 - prefixLength),
+            networkKey = Number.IntegerDivide(addressValue, blockSize) * blockSize
+        in
+            [NetworkKey = networkKey, PrefixLength = prefixLength, BlockSize = blockSize],
+
+    /* Renders one normalized candidate without reparsing subnet text. */
+    IpSubnetCandidateFromFacts = (
+        networkKey as number,
+        prefixLength as number,
+        usesCidr as logical,
+        sourcePosition as number
+    ) as record =>
+        let
+            facts = IpSubnetFacts(networkKey, prefixLength),
+            networkText = IpBinToStr(facts[NetworkKey]),
+            maskValue = (Number.Power(2, prefixLength) - 1) * facts[BlockSize],
+            output = if usesCidr then networkText & "/" & Number.ToText(prefixLength, "0", "en-US") else networkText & " " & IpBinToStr(maskValue)
+        in
+            [NetworkKey = facts[NetworkKey], PrefixLength = prefixLength, UsesCidr = usesCidr, SourcePosition = sourcePosition, Output = output],
+
+    /* Parses and canonicalizes one candidate for all subnet-list operations. */
+    IpSubnetCandidateFromValue = (rawSubnet as any, sourcePosition as number, errorName as text) as record =>
+        let
+            checkedSubnet =
+                if not Value.Is(rawSubnet, type text) then
+                    error Error.Record(errorName, "Subnet list items must contain text.", [Input = rawSubnet, Component = "subnet", Expected = "IPv4 subnet text"])
+                else rawSubnet,
+            parsedSubnet = IpSubnetParseWithAddressValue(checkedSubnet),
+            facts = parsedSubnet[Facts],
+            usesCidr = Text.PositionOf(checkedSubnet, "/") >= 0 or Text.PositionOf(checkedSubnet, " ") < 0
+        in
+            IpSubnetCandidateFromFacts(facts[NetworkKey], facts[PrefixLength], usesCidr, sourcePosition),
+
+    /* Removes null/empty cells while preserving invalid values for validation. */
+    IpSubnetCleanList = (values as nullable list, listName as text, errorName as text) as list =>
+        let
+            checkedValues =
+                if values = null then
+                    error Error.Record(errorName, listName & " list cannot be null.", [Input = values, Component = listName, Expected = "list of subnet text"])
+                else values
+        in
+            List.Select(checkedValues, (rawSubnet as any) as logical => if rawSubnet = null then false else if Value.Is(rawSubnet, type text) then rawSubnet <> "" else true),
+
+    /* Parses candidates in source order so notation tie-breaks remain stable. */
+    IpSubnetCandidatesFromList = (values as list, errorName as text) as list =>
+        List.Transform(List.Positions(values), (position as number) => IpSubnetCandidateFromValue(values{position}, position, errorName)),
+
+    /* Tests normalized subnet containment without reparsing candidate text. */
+    IpSubnetCandidateContains = (outer as record, inner as record) as logical =>
+        inner[PrefixLength] >= outer[PrefixLength]
+            and IpSubnetFacts(inner[NetworkKey], outer[PrefixLength])[NetworkKey] = outer[NetworkKey],
+
+    /* Sorts by network and prefix, then source order for stable notation. */
+    IpSubnetCandidateCompare = (left as record, right as record) as number =>
+        if left[NetworkKey] < right[NetworkKey] then -1
+        else if left[NetworkKey] > right[NetworkKey] then 1
+        else if left[PrefixLength] < right[PrefixLength] then -1
+        else if left[PrefixLength] > right[PrefixLength] then 1
+        else Value.Compare(left[SourcePosition], right[SourcePosition]),
+
+    /* Joins siblings and preserves notation from the earliest input candidate. */
+    IpSubnetJoinedCandidate = (left as record, right as record) as nullable record =>
+        if left[PrefixLength] <> right[PrefixLength] or left[PrefixLength] = 0 then null
+        else
+            let
+                parentFacts = IpSubnetFacts(left[NetworkKey], left[PrefixLength] - 1),
+                rightParentFacts = IpSubnetFacts(right[NetworkKey], right[PrefixLength] - 1),
+                earlier = if left[SourcePosition] <= right[SourcePosition] then left else right
+            in
+                if parentFacts[NetworkKey] = rightParentFacts[NetworkKey] then
+                    IpSubnetCandidateFromFacts(parentFacts[NetworkKey], parentFacts[PrefixLength], earlier[UsesCidr], earlier[SourcePosition])
+                else null,
+
+    /* A stack fold bounds merge recursion by the 32 IPv4 prefix levels. */
+    IpSubnetAggregateCandidates = (candidates as list) as list =>
+        let
+            push = (stack as list, candidate as record) as list =>
+                if List.IsEmpty(stack) then {candidate}
+                else
+                    let
+                        previous = List.Last(stack),
+                        joined = IpSubnetJoinedCandidate(previous, candidate)
+                    in
+                        if IpSubnetCandidateContains(previous, candidate) then stack
+                        else if joined <> null then @push(List.RemoveLastN(stack, 1), joined)
+                        else stack & {candidate}
+        in
+            List.Accumulate(List.Sort(candidates, IpSubnetCandidateCompare), {}, (stack as list, candidate as record) => push(stack, candidate)),
+
     /*
         Sorts and summarizes a list of IPv4 subnets.
 
@@ -1647,9 +1699,8 @@ let
         not a spilled worksheet array. Output addresses are canonical network
         addresses. CIDR input and unmasked input use CIDR output, while dotted
         mask input uses a canonical dotted mask. A null descending value means
-        ascending order. When equal normalized network/prefix records use
-        different notation, the first non-empty input determines the output
-        notation, matching the stable JavaScript sort behavior.
+        ascending order. When normalized records are deduplicated or merged,
+        the earliest non-empty input involved determines the output notation.
 
         Examples:
             IpSubnetAggregateArrayDoc({"192.168.1.0/25", "192.168.1.128/25"})
@@ -1660,156 +1711,13 @@ let
                 {"192.168.1.0 255.255.255.128", "192.168.1.128 255.255.255.128"}
             ) = {"192.168.1.0 255.255.255.0"}
     */
-    IpSubnetCandidateContains = (outer as record, inner as record) as logical =>
+    IpSubnetAggregateArray = (subnets as nullable list, optional descending as nullable logical) as list =>
         let
-            outerBlockSize = Number.Power(2, 32 - outer[PrefixLength]),
-            innerNetworkAtOuter = Number.IntegerDivide(inner[NetworkKey], outerBlockSize) * outerBlockSize
+            nonEmptySubnets = IpSubnetCleanList(subnets, "subnets", "IpSubnetAggregateArray.InvalidInput"),
+            candidates = IpSubnetCandidatesFromList(nonEmptySubnets, "IpSubnetAggregateArray.InvalidInput"),
+            ascendingResult = List.Transform(IpSubnetAggregateCandidates(candidates), (candidate as record) => candidate[Output])
         in
-            inner[PrefixLength] >= outer[PrefixLength]
-                and innerNetworkAtOuter = outer[NetworkKey],
-
-    IpSubnetCandidateCompare = (left as record, right as record) as number =>
-        if left[NetworkKey] < right[NetworkKey] then
-            -1
-        else if left[NetworkKey] > right[NetworkKey] then
-            1
-        else if left[PrefixLength] < right[PrefixLength] then
-            -1
-        else if left[PrefixLength] > right[PrefixLength] then
-            1
-        else if left[OriginalIndex] < right[OriginalIndex] then
-            -1
-        else if left[OriginalIndex] > right[OriginalIndex] then
-            1
-        else
-            0,
-
-    IpSubnetAggregateArray = (
-        subnets as nullable list,
-        optional descending as nullable logical
-    ) as list =>
-        let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpSubnetAggregateArray.InvalidInput", message, detail),
-
-            checkedSubnets =
-                if subnets = null then
-                    fail(
-                        "Subnet list cannot be null.",
-                        [Input = subnets, Component = "subnets", Expected = "list of subnet text"]
-                    )
-                else
-                    subnets,
-            nonEmptySubnets =
-                List.Select(
-                    checkedSubnets,
-                    (rawSubnet as any) as logical =>
-                        if rawSubnet = null then
-                            false
-                        else if Value.Is(rawSubnet, type text) then
-                            rawSubnet <> ""
-                        else
-                            true
-                ),
-            bufferedNonEmptySubnets = List.Buffer(nonEmptySubnets),
-
-            candidateFromValue = (rawSubnet as any, originalIndex as number) as record =>
-                let
-                    checkedSubnet =
-                        if not Value.Is(rawSubnet, type text) then
-                            fail(
-                                "Subnet list items must contain text.",
-                                [Input = rawSubnet, Component = "subnet", Expected = "IPv4 subnet text"]
-                            )
-                        else
-                            rawSubnet,
-                    parsedSubnet = IpSubnetParse(checkedSubnet),
-                    addressValue = IpStrToBin(parsedSubnet[Address]),
-                    prefixLength = parsedSubnet[PrefixLength],
-                    blockSize = Number.Power(2, 32 - prefixLength),
-                    networkKey = Number.IntegerDivide(addressValue, blockSize) * blockSize,
-                    slashPosition = Text.PositionOf(checkedSubnet, "/"),
-                    spacePosition = Text.PositionOf(checkedSubnet, " "),
-                    usesCidr = slashPosition >= 0 or spacePosition < 0,
-                    networkText = IpBinToStr(networkKey),
-                    maskValue = (Number.Power(2, prefixLength) - 1) * blockSize,
-                    output =
-                        if usesCidr then
-                            networkText & "/" & Number.ToText(prefixLength, "0", "en-US")
-                        else
-                            networkText & " " & IpBinToStr(maskValue)
-                in
-                    [
-                        NetworkKey = networkKey,
-                        PrefixLength = prefixLength,
-                        UsesCidr = usesCidr,
-                        OriginalIndex = originalIndex,
-                        Output = output
-                    ],
-
-            candidates =
-                List.Transform(
-                    List.Positions(bufferedNonEmptySubnets),
-                    (position as number) => candidateFromValue(bufferedNonEmptySubnets{position}, position)
-                ),
-            sortedCandidates = List.Sort(candidates, IpSubnetCandidateCompare),
-
-            joinedCandidate = (left as record, right as record) as nullable record =>
-                if left[PrefixLength] <> right[PrefixLength] or left[PrefixLength] = 0 then
-                    null
-                else
-                    let
-                        parentPrefixLength = left[PrefixLength] - 1,
-                        parentBlockSize = Number.Power(2, 32 - parentPrefixLength),
-                        parentNetworkKey = Number.IntegerDivide(left[NetworkKey], parentBlockSize) * parentBlockSize,
-                        rightNetworkAtParent = Number.IntegerDivide(right[NetworkKey], parentBlockSize) * parentBlockSize,
-                        canJoin = parentNetworkKey = rightNetworkAtParent,
-                        networkText = IpBinToStr(parentNetworkKey),
-                        maskValue = (Number.Power(2, parentPrefixLength) - 1) * parentBlockSize,
-                        output =
-                            if left[UsesCidr] then
-                                networkText & "/" & Number.ToText(parentPrefixLength, "0", "en-US")
-                            else
-                                networkText & " " & IpBinToStr(maskValue)
-                    in
-                        if canJoin then
-                            [
-                                NetworkKey = parentNetworkKey,
-                                PrefixLength = parentPrefixLength,
-                                UsesCidr = left[UsesCidr],
-                                OriginalIndex = left[OriginalIndex],
-                                Output = output
-                            ]
-                        else
-                            null,
-
-            aggregate = (items as list, position as number) as list =>
-                if List.Count(items) < 2 or position >= List.Count(items) - 1 then
-                    items
-                else
-                    let
-                        left = items{position},
-                        right = items{position + 1},
-                        merged = joinedCandidate(left, right)
-                    in
-                        if IpSubnetCandidateContains(left, right) then
-                            @aggregate(List.RemoveRange(items, position + 1, 1), position)
-                        else if merged <> null then
-                            @aggregate(
-                                List.ReplaceRange(items, position, 2, {merged}),
-                                if position > 0 then position - 1 else 0
-                            )
-                        else
-                            @aggregate(items, position + 1),
-
-            aggregatedCandidates = aggregate(sortedCandidates, 0),
-            ascendingResult = List.Transform(aggregatedCandidates, (candidate as record) => candidate[Output]),
-            descendingMode = if descending = null then false else descending
-        in
-            if descendingMode then
-                List.Reverse(ascendingResult)
-            else
-                ascendingResult,
+            if descending ?? false then List.Reverse(ascendingResult) else ascendingResult,
 
     IpSubnetAggregateArrayType =
         type function (
@@ -1823,8 +1731,7 @@ let
            ])
         ) as list meta [
             Documentation.Name = "IpSubnetAggregateArray",
-            Documentation.Description = "Sorts and summarizes a list of IPv4 subnets.",
-            Documentation.LongDescription = "Normalizes, sorts, deduplicates, removes contained subnets, and joins aligned adjacent equal-size IPv4 subnets. Returns a Power Query list of canonical network text; CIDR and unmasked inputs render as CIDR, dotted-mask inputs render with canonical dotted masks. Equal normalized network/prefix records retain the first non-empty input's notation. Null or empty list items are ignored, non-text items and invalid subnet text raise structured validation errors, and a null descending value means ascending order.",
+            Documentation.LongDescription = "Normalizes, sorts, deduplicates, removes contained subnets, and joins aligned adjacent equal-size IPv4 subnets. Returns a Power Query list of canonical network text; CIDR and unmasked inputs render as CIDR, dotted-mask inputs render with canonical dotted masks. Deduplicated and merged records retain notation from the earliest contributing non-empty input. Null or empty list items are ignored, non-text items and invalid subnet text raise structured validation errors, and a null descending value means ascending order.",
             Documentation.Examples = {
                 [
                     Description = "Join two adjacent /25 networks.",
@@ -1876,81 +1783,13 @@ let
                 true
             ) = {"192.168.1.0/24", "10.0.0.0/8"}
     */
-    IpSubnetSortArray = (
-        subnets as nullable list,
-        optional descending as nullable logical
-    ) as list =>
+    IpSubnetSortArray = (subnets as nullable list, optional descending as nullable logical) as list =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpSubnetSortArray.InvalidInput", message, detail),
-
-            checkedSubnets =
-                if subnets = null then
-                    fail(
-                        "Subnet list cannot be null.",
-                        [Input = subnets, Component = "subnets", Expected = "list of subnet text"]
-                    )
-                else
-                    subnets,
-            nonEmptySubnets =
-                List.Select(
-                    checkedSubnets,
-                    (rawSubnet as any) as logical =>
-                        if rawSubnet = null then
-                            false
-                        else if Value.Is(rawSubnet, type text) then
-                            rawSubnet <> ""
-                        else
-                            true
-                ),
-            bufferedNonEmptySubnets = List.Buffer(nonEmptySubnets),
-
-            candidateFromValue = (rawSubnet as any, originalIndex as number) as record =>
-                let
-                    checkedSubnet =
-                        if not Value.Is(rawSubnet, type text) then
-                            fail(
-                                "Subnet list items must contain text.",
-                                [Input = rawSubnet, Component = "subnet", Expected = "IPv4 subnet text"]
-                            )
-                        else
-                            rawSubnet,
-                    parsedSubnet = IpSubnetParse(checkedSubnet),
-                    addressValue = IpStrToBin(parsedSubnet[Address]),
-                    prefixLength = parsedSubnet[PrefixLength],
-                    blockSize = Number.Power(2, 32 - prefixLength),
-                    networkKey = Number.IntegerDivide(addressValue, blockSize) * blockSize,
-                    slashPosition = Text.PositionOf(checkedSubnet, "/"),
-                    spacePosition = Text.PositionOf(checkedSubnet, " "),
-                    usesCidr = slashPosition >= 0 or spacePosition < 0,
-                    networkText = IpBinToStr(networkKey),
-                    maskValue = (Number.Power(2, prefixLength) - 1) * blockSize,
-                    output =
-                        if usesCidr then
-                            networkText & "/" & Number.ToText(prefixLength, "0", "en-US")
-                        else
-                            networkText & " " & IpBinToStr(maskValue)
-                in
-                    [
-                        NetworkKey = networkKey,
-                        PrefixLength = prefixLength,
-                        OriginalIndex = originalIndex,
-                        Output = output
-                    ],
-
-            candidates =
-                List.Transform(
-                    List.Positions(bufferedNonEmptySubnets),
-                    (position as number) => candidateFromValue(bufferedNonEmptySubnets{position}, position)
-                ),
-            sortedCandidates = List.Sort(candidates, IpSubnetCandidateCompare),
-            sortedResult = List.Transform(sortedCandidates, (candidate as record) => candidate[Output]),
-            descendingMode = if descending = null then false else descending
+            nonEmptySubnets = IpSubnetCleanList(subnets, "subnets", "IpSubnetSortArray.InvalidInput"),
+            candidates = IpSubnetCandidatesFromList(nonEmptySubnets, "IpSubnetSortArray.InvalidInput"),
+            sortedResult = List.Transform(List.Sort(candidates, IpSubnetCandidateCompare), (candidate as record) => candidate[Output])
         in
-            if descendingMode then
-                List.Reverse(sortedResult)
-            else
-                sortedResult,
+            if descending ?? false then List.Reverse(sortedResult) else sortedResult,
 
     IpSubnetSortArrayType =
         type function (
@@ -1964,7 +1803,6 @@ let
            ])
         ) as list meta [
             Documentation.Name = "IpSubnetSortArray",
-            Documentation.Description = "Sorts a list of IPv4 subnets by network address and prefix length.",
             Documentation.LongDescription = "Normalizes and sorts IPv4 subnet text by ascending network address and then ascending prefix length, with shorter prefixes first for the same network. Returns canonical network text; unmasked input renders as /32 and dotted-mask input uses a canonical dotted mask. Null or empty list items are ignored, non-text items and invalid subnet text raise structured validation errors, and a null descending value means ascending order.",
             Documentation.Examples = {
                 [
@@ -1987,23 +1825,55 @@ let
 
     IpSubnetSortArrayDoc = Value.ReplaceType(IpSubnetSortArray, IpSubnetSortArrayType),
 
+    /* Subtracts candidate records without reparsing or mutating one shared list. */
+    IpSubtractSubnetCandidates = (inputCandidates as list, subtractCandidates as list, fastMode as logical) as list =>
+        let
+            preparedInput = if fastMode then IpSubnetAggregateCandidates(inputCandidates) else inputCandidates,
+            preparedSubtract = if fastMode then IpSubnetAggregateCandidates(subtractCandidates) else subtractCandidates,
+            subtractOne = (inputCandidate as record, subtractCandidate as record) as list =>
+                if IpSubnetCandidateContains(subtractCandidate, inputCandidate) then {}
+                else if not IpSubnetCandidateContains(inputCandidate, subtractCandidate) then {inputCandidate}
+                else
+                    let
+                        siblingPrefixes = {(inputCandidate[PrefixLength] + 1)..subtractCandidate[PrefixLength]},
+                        siblings = List.Transform(
+                            siblingPrefixes,
+                            (prefixLength as number) as record =>
+                                let
+                                    childFacts = IpSubnetFacts(subtractCandidate[NetworkKey], prefixLength),
+                                    parentFacts = IpSubnetFacts(subtractCandidate[NetworkKey], prefixLength - 1),
+                                    siblingNetworkKey = if childFacts[NetworkKey] = parentFacts[NetworkKey] then childFacts[NetworkKey] + childFacts[BlockSize] else parentFacts[NetworkKey]
+                                in
+                                    IpSubnetCandidateFromFacts(siblingNetworkKey, prefixLength, true, inputCandidate[SourcePosition])
+                        )
+                    in
+                        List.Sort(siblings, IpSubnetCandidateCompare),
+            subtractFromFragments = (fragments as list, subtractCandidate as record) as list =>
+                List.Combine(List.Transform(fragments, (fragment as record) => subtractOne(fragment, subtractCandidate))),
+            subtractFromInput = (inputCandidate as record) as list =>
+                List.Accumulate(preparedSubtract, {inputCandidate}, subtractFromFragments)
+        in
+            List.Combine(List.Transform(preparedInput, subtractFromInput)),
+
     /*
         Removes subnets from an IPv4 subnet list.
 
         The VBA and JavaScript references remove each subtracting subnet from
-        the input list. When a subtractor is contained by an input subnet,
-        that input subnet is split into its two next-prefix children and the
-        scan continues over the children. When the input subnet is contained
-        by the subtractor, it is removed.
+        the input list. When a subtractor is contained by an input subnet, the
+        result is the ordered set of sibling CIDRs along the path to that
+        subtractor, equivalent to repeatedly splitting into next-prefix
+        children. When the input subnet is contained by the subtractor, it is
+        removed.
 
         The Power Query contract replaces Excel ranges and spilled arrays with
         two lists of subnet text. Null and empty text items are ignored as
         empty range cells; every remaining item must be text. Fast mode is the
-        default and first aggregates both lists, then uses the sorted network
-        keys to advance through both lists. Fast=false preserves input order
-        as far as removal and splitting allow, matching the reference's slow
-        mode. A null fast value means true. Empty input or subtract lists are
-        valid and return an empty or unchanged result respectively.
+        default and first aggregates both candidate lists without reparsing
+        their rendered text. Fast=false preserves input order as far as removal
+        and splitting allow, matching the reference's slow mode. A null fast
+        value means true. Empty input or subtract lists are valid; an empty
+        input returns empty, while an empty subtract list returns the normalized
+        input in fast mode and canonicalized input order in slow mode.
 
         Examples:
             IpSubtractSubnetsDoc(
@@ -2020,146 +1890,16 @@ let
                 false
             ) = {"10.0.0.0/25", "192.0.2.0/24"}
     */
-    IpSubtractSubnets = (
-        inputSubnets as nullable list,
-        subtractSubnets as nullable list,
-        optional fast as nullable logical
-    ) as list =>
+    IpSubtractSubnets = (inputSubnets as nullable list, subtractSubnets as nullable list, optional fast as nullable logical) as list =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpSubtractSubnets.InvalidInput", message, detail),
-
-            cleanList = (values as nullable list, listName as text) as list =>
-                let
-                    checkedValues =
-                        if values = null then
-                            fail(
-                                listName & " list cannot be null.",
-                                [Input = values, Component = listName, Expected = "list of subnet text"]
-                            )
-                        else
-                            values
-                in
-                    List.Select(
-                        checkedValues,
-                        (rawSubnet as any) as logical =>
-                            if rawSubnet = null then
-                                false
-                            else if Value.Is(rawSubnet, type text) then
-                                rawSubnet <> ""
-                            else
-                                true
-                    ),
-
-            checkedInputSubnets = cleanList(inputSubnets, "input"),
-            checkedSubtractSubnets = cleanList(subtractSubnets, "subtract"),
-
-            makeRecord = (rawSubnet as any, outputText as text) as record =>
-                let
-                    checkedSubnet =
-                        if not Value.Is(rawSubnet, type text) then
-                            fail(
-                                "Subnet list items must contain text.",
-                                [Input = rawSubnet, Component = "subnet", Expected = "IPv4 subnet text"]
-                            )
-                        else
-                            rawSubnet,
-                    parsedSubnet = IpSubnetParse(checkedSubnet),
-                    addressValue = IpStrToBin(parsedSubnet[Address]),
-                    prefixLength = parsedSubnet[PrefixLength],
-                    blockSize = Number.Power(2, 32 - prefixLength),
-                    networkKey = Number.IntegerDivide(addressValue, blockSize) * blockSize
-                in
-                    [
-                        NetworkKey = networkKey,
-                        PrefixLength = prefixLength,
-                        Output = outputText
-                    ],
-
-            makeRecords = (values as list) as list =>
-                List.Transform(
-                    List.Positions(values),
-                    (position as number) => makeRecord(values{position}, values{position})
-                ),
-
-            splitSubnet = (subnet as record) as list =>
-                let
-                    childPrefixLength = subnet[PrefixLength] + 1,
-                    childBlockSize = Number.Power(2, 32 - childPrefixLength),
-                    firstChildKey = subnet[NetworkKey],
-                    secondChildKey = firstChildKey + childBlockSize,
-                    firstChildText = IpBinToStr(firstChildKey) & "/" & Number.ToText(childPrefixLength, "0", "en-US"),
-                    secondChildText = IpBinToStr(secondChildKey) & "/" & Number.ToText(childPrefixLength, "0", "en-US")
-                in
-                    {
-                        makeRecord(firstChildText, firstChildText),
-                        makeRecord(secondChildText, secondChildText)
-                    },
-
-            fastMode = if fast = null then true else fast,
-            preparedInput =
-                if fastMode then
-                    makeRecords(IpSubnetAggregateArray(checkedInputSubnets))
-                else
-                    makeRecords(checkedInputSubnets),
-            preparedSubtract =
-                if fastMode then
-                    makeRecords(IpSubnetAggregateArray(checkedSubtractSubnets))
-                else
-                    makeRecords(checkedSubtractSubnets),
-
-            subtractLoop = (
-                inputRecords as list,
-                subtractRecords as list,
-                subtractPosition as number,
-                inputPosition as number
-            ) as list =>
-                if subtractPosition >= List.Count(subtractRecords) or inputPosition >= List.Count(inputRecords) then
-                    inputRecords
-                else
-                    let
-                        subtractRecord = subtractRecords{subtractPosition},
-                        inputRecord = inputRecords{inputPosition},
-                        inputContainsSubtract = IpSubnetCandidateContains(inputRecord, subtractRecord),
-                        subtractContainsInput = IpSubnetCandidateContains(subtractRecord, inputRecord)
-                    in
-                        if subtractContainsInput then
-                            @subtractLoop(
-                                List.RemoveRange(inputRecords, inputPosition, 1),
-                                subtractRecords,
-                                subtractPosition,
-                                inputPosition
-                            )
-                        else if inputContainsSubtract then
-                            @subtractLoop(
-                                List.ReplaceRange(inputRecords, inputPosition, 1, splitSubnet(inputRecord)),
-                                subtractRecords,
-                                subtractPosition,
-                                inputPosition
-                            )
-                        else if fastMode then
-                            if inputRecord[NetworkKey] < subtractRecord[NetworkKey] then
-                                @subtractLoop(inputRecords, subtractRecords, subtractPosition, inputPosition + 1)
-                            else
-                                @subtractLoop(inputRecords, subtractRecords, subtractPosition + 1, inputPosition)
-                        else
-                            let
-                                nextInputPosition = inputPosition + 1
-                            in
-                                if nextInputPosition >= List.Count(inputRecords) then
-                                    @subtractLoop(inputRecords, subtractRecords, subtractPosition + 1, 0)
-                                else
-                                    @subtractLoop(inputRecords, subtractRecords, subtractPosition, nextInputPosition),
-
-            resultRecords =
-                if List.Count(preparedInput) = 0 then
-                    {}
-                else if List.Count(preparedSubtract) = 0 then
-                    preparedInput
-                else
-                    subtractLoop(preparedInput, preparedSubtract, 0, 0)
+            errorName = "IpSubtractSubnets.InvalidInput",
+            checkedInputSubnets = IpSubnetCleanList(inputSubnets, "input", errorName),
+            checkedSubtractSubnets = IpSubnetCleanList(subtractSubnets, "subtract", errorName),
+            inputCandidates = IpSubnetCandidatesFromList(checkedInputSubnets, errorName),
+            subtractCandidates = IpSubnetCandidatesFromList(checkedSubtractSubnets, errorName),
+            resultCandidates = IpSubtractSubnetCandidates(inputCandidates, subtractCandidates, fast ?? true)
         in
-            List.Transform(resultRecords, (subnet as record) => subnet[Output]),
+            List.Transform(resultCandidates, (candidate as record) => candidate[Output]),
 
     IpSubtractSubnetsType =
         type function (
@@ -2177,8 +1917,7 @@ let
            ])
         ) as list meta [
             Documentation.Name = "IpSubtractSubnets",
-            Documentation.Description = "Removes IPv4 subnets from an input list.",
-            Documentation.LongDescription = "Removes each subtracting subnet from an input IPv4 subnet list. Fast mode, enabled by default, aggregates both lists and uses sorted network keys; slow mode preserves input order as far as removal and splitting allow. A containing input subnet is split into two child CIDRs when necessary. Returns a Power Query list, ignores null or empty cells, and raises structured validation errors for non-text or malformed subnet values.",
+            Documentation.LongDescription = "Removes each subtracting subnet from an input IPv4 subnet list. Fast mode, enabled by default, aggregates both lists and uses sorted network keys; slow mode preserves input order as far as removal and splitting allow. A containing input subnet is replaced by the ordered sibling CIDRs outside the subtractor. Returns a Power Query list, ignores null or empty cells, and raises structured validation errors for non-text or malformed subnet values.",
             Documentation.Examples = {
                 [
                     Description = "Subtract the lower half of a /24.",
@@ -2229,50 +1968,17 @@ let
                 {"192.168.1.128/25"}
             ) = {"192.168.1.128/25"}
     */
-    IpCommonSubnets = (
-        firstSubnets as nullable list,
-        secondSubnets as nullable list
-    ) as list =>
+    IpCommonSubnets = (firstSubnets as nullable list, secondSubnets as nullable list) as list =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpCommonSubnets.InvalidInput", message, detail),
-
-            cleanList = (values as nullable list, listName as text) as list =>
-                let
-                    checkedValues =
-                        if values = null then
-                            fail(
-                                listName & " list cannot be null.",
-                                [Input = values, Component = listName, Expected = "list of subnet text"]
-                            )
-                        else
-                            values
-                in
-                    List.Select(
-                        checkedValues,
-                        (rawSubnet as any) as logical =>
-                            if rawSubnet = null then
-                                false
-                            else if Value.Is(rawSubnet, type text) then
-                                rawSubnet <> ""
-                            else
-                                true
-                    ),
-
-            checkedFirstSubnets = cleanList(firstSubnets, "first"),
-            checkedSecondSubnets = cleanList(secondSubnets, "second"),
-            difference =
-                if List.Count(checkedFirstSubnets) = 0 or List.Count(checkedSecondSubnets) = 0 then
-                    {}
-                else
-                    IpSubtractSubnets(checkedFirstSubnets, checkedSecondSubnets, true),
-            commonSubnets =
-                if List.Count(checkedFirstSubnets) = 0 or List.Count(checkedSecondSubnets) = 0 then
-                    {}
-                else
-                    IpSubtractSubnets(checkedFirstSubnets, difference, true)
+            errorName = "IpCommonSubnets.InvalidInput",
+            checkedFirstSubnets = IpSubnetCleanList(firstSubnets, "first", errorName),
+            checkedSecondSubnets = IpSubnetCleanList(secondSubnets, "second", errorName),
+            firstCandidates = IpSubnetCandidatesFromList(checkedFirstSubnets, errorName),
+            secondCandidates = IpSubnetCandidatesFromList(checkedSecondSubnets, errorName),
+            difference = IpSubtractSubnetCandidates(firstCandidates, secondCandidates, true),
+            commonCandidates = IpSubtractSubnetCandidates(firstCandidates, difference, true)
         in
-            commonSubnets,
+            List.Transform(commonCandidates, (candidate as record) => candidate[Output]),
 
     IpCommonSubnetsType =
         type function (
@@ -2286,7 +1992,6 @@ let
            ])
         ) as list meta [
             Documentation.Name = "IpCommonSubnets",
-            Documentation.Description = "Returns the IPv4 subnets common to two lists.",
             Documentation.LongDescription = "Computes the intersection of two IPv4 subnet lists by composing fast IpSubtractSubnets operations. Duplicate and overlapping inputs are normalized, and the result is a canonical Power Query list. Null or empty items are ignored, non-text or malformed subnet values raise structured validation errors, and an empty input on either side returns an empty list.",
             Documentation.Examples = {
                 [
@@ -2348,8 +2053,7 @@ let
         resultColumn as nullable text
     ) as nullable text =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpSubnetVLookupAreas.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpSubnetVLookupAreas.InvalidInput"),
 
             checkedTable =
                 if tableArray = null then
@@ -2374,9 +2078,13 @@ let
                 else
                     fail(
                         "Lookup table must contain Subnet and the selected result column.",
-                        [Input = tableArray, Component = "table", Expected = {"Subnet", checkedResultColumn}]
+                        [Input = tableArray, Component = "table", Expected = "Subnet and " & checkedResultColumn & " columns"]
                     ),
-            resultValues = List.Buffer(Table.Column(checkedTable, checkedResultColumn)),
+            resultValues =
+                if hasRequiredColumns then
+                    List.Buffer(Table.Column(checkedTable, checkedResultColumn))
+                else
+                    {},
             searchAddressValue = IpStrToBin(ip),
 
             candidateFromRow = (position as number) as record =>
@@ -2394,17 +2102,14 @@ let
                             [Matched = false, PrefixLength = -1, Value = null]
                         else
                             let
-                                parsedSubnet = IpSubnetParse(rawSubnet),
-                                candidateAddressValue = IpStrToBin(parsedSubnet[Address]),
-                                prefixLength = parsedSubnet[PrefixLength],
-                                blockSize = Number.Power(2, 32 - prefixLength),
-                                candidateNetworkKey = Number.IntegerDivide(candidateAddressValue, blockSize) * blockSize,
-                                searchNetworkKey = Number.IntegerDivide(searchAddressValue, blockSize) * blockSize,
+                                parsedSubnet = IpSubnetParseWithAddressValue(rawSubnet),
+                                candidateFacts = parsedSubnet[Facts],
+                                searchFacts = IpSubnetFacts(searchAddressValue, candidateFacts[PrefixLength]),
                                 selectedValue = Text.From(resultValues{position}, "en-US")
                             in
                                 [
-                                    Matched = searchNetworkKey = candidateNetworkKey,
-                                    PrefixLength = prefixLength,
+                                    Matched = searchFacts[NetworkKey] = candidateFacts[NetworkKey],
+                                    PrefixLength = candidateFacts[PrefixLength],
                                     Value = selectedValue
                                 ]
                 in
@@ -2449,13 +2154,12 @@ let
            ])
         ) as nullable text meta [
             Documentation.Name = "IpSubnetVLookupAreas",
-            Documentation.Description = "Returns the value from the most-specific matching IPv4 subnet row.",
             Documentation.LongDescription = "Scans a combined Power Query table with a required Subnet column and returns the selected result-column value for the most-specific matching subnet. Equal-prefix matches retain the first row. Null or empty Subnet cells are ignored; no match returns null instead of the VBA sentinel Not Found; and a /0 row alone does not count as a match because the VBA baseline requires a strictly longer prefix than its initial /0 sentinel.",
             Documentation.Examples = {
                 [
                     Description = "Return the most-specific matching row's value.",
                     Code = "IpSubnetVLookupAreas(\"10.1.2.3\", #table(type table [Subnet = text, Name = text], {{\"10.0.0.0/8\", \"wide\"}, {\"10.1.0.0/16\", \"narrow\"}}), \"Name\")",
-                    Result = "narrow"
+                    Result = "\"narrow\""
                 ],
                 [
                     Description = "Return null when no subnet matches.",
@@ -2465,7 +2169,7 @@ let
                 [
                     Description = "Use the first row when equal-prefix matches are duplicated.",
                     Code = "IpSubnetVLookupAreas(\"10.1.2.3\", #table(type table [Subnet = text, Name = text], {{\"10.1.0.0/16\", \"first\"}, {\"10.1.0.0/16\", \"second\"}}), \"Name\")",
-                    Result = "first"
+                    Result = "\"first\""
                 ]
             }
         ],
@@ -2484,13 +2188,17 @@ let
         implementation, this M contract rejects non-contiguous masks explicitly
         instead of deriving a misleading prefix length from the last one bit.
 
-        Example:
+        Examples:
             IpMaskLenDoc("255.255.255.0") = 24
+            IpMaskLenDoc("0.0.0.0") = 0
+            IpMaskLenDoc("255.255.255.255") = 32
+
+        Null, malformed dotted-decimal text, and non-contiguous masks raise
+        structured validation errors.
     */
     IpMaskLen = (mask as nullable text) as number =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpMaskLen.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpMaskLen.InvalidInput"),
 
             maskValue =
                 if mask = null then
@@ -2530,7 +2238,6 @@ let
            ])
         ) as number meta [
             Documentation.Name = "IpMaskLen",
-            Documentation.Description = "Returns the prefix length represented by a dotted-decimal IPv4 mask.",
             Documentation.LongDescription = "Accepts canonical contiguous IPv4 subnet masks and returns a prefix length from 0 through 32.",
             Documentation.Examples = {
                 [
@@ -2590,7 +2297,6 @@ let
            ])
         ) as number meta [
             Documentation.Name = "IpMaskBin",
-            Documentation.Description = "Returns the numeric IPv4 mask represented by a subnet.",
             Documentation.LongDescription = "Returns the canonical numeric IPv4 mask for a validated subnet expression using 2^prefix minus 1, shifted by the host-bit count. CIDR, dotted-decimal mask, and unmasked address notation are supported; an unmasked address is treated as /32. Invalid inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -2650,7 +2356,6 @@ let
            ])
         ) as text meta [
             Documentation.Name = "IpMask",
-            Documentation.Description = "Returns the dotted-decimal IPv4 mask represented by a subnet.",
             Documentation.LongDescription = "Returns the canonical dotted-decimal mask for a validated IPv4 subnet expression. CIDR, dotted-decimal mask, and unmasked address notation are supported; an unmasked address is treated as /32. Invalid inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -2703,7 +2408,6 @@ let
            ])
         ) as text meta [
             Documentation.Name = "IpWildMask",
-            Documentation.Description = "Returns the dotted-decimal wildcard mask represented by a subnet.",
             Documentation.LongDescription = "Returns the 32-bit complement of a validated canonical subnet mask. CIDR, dotted-decimal mask, and unmasked address notation are supported; an unmasked address is treated as /32. Invalid inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -2775,18 +2479,12 @@ let
         optional descending as nullable logical
     ) as list =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpRangeToCIDR.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpRangeToCIDR.InvalidInput"),
 
-            allBits = Number.Power(2, 32) - 1,
             firstValue = IpStrToBin(firstAddress),
             lastValue = IpStrToBin(lastAddress),
             normalizedFirst = Number.IntegerDivide(firstValue, 2) * 2,
-            normalizedLast =
-                if lastValue = allBits then
-                    allBits
-                else
-                    Number.IntegerDivide(lastValue, 2) * 2 + 1,
+            normalizedLast = Number.IntegerDivide(lastValue, 2) * 2 + 1,
 
             candidatePrefixes = {0..32},
             largestBlock = (current as number) as record =>
@@ -2796,14 +2494,12 @@ let
                             candidatePrefixes,
                             (prefixLength as number) as record =>
                                 let
-                                    blockSize = Number.Power(2, 32 - prefixLength),
-                                    network = Number.IntegerDivide(current, blockSize) * blockSize,
-                                    broadcast = network + blockSize - 1
+                                    facts = IpSubnetFacts(current, prefixLength)
                                 in
                                     [
-                                        PrefixLength = prefixLength,
-                                        Network = network,
-                                        Broadcast = broadcast
+                                        PrefixLength = facts[PrefixLength],
+                                        Network = facts[NetworkKey],
+                                        Broadcast = facts[NetworkKey] + facts[BlockSize] - 1
                                     ]
                         ),
                     alignedCandidates =
@@ -2823,8 +2519,8 @@ let
                         [
                             Input = [FirstAddress = firstAddress, LastAddress = lastAddress],
                             Component = "range",
-                            FirstAddress = normalizedFirst,
-                            LastAddress = normalizedLast,
+                            NormalizedFirst = normalizedFirst,
+                            NormalizedLast = normalizedLast,
                             Expected = "first address <= last address"
                         ]
                     )
@@ -2854,7 +2550,7 @@ let
                             & "/"
                             & Number.ToText(block[PrefixLength], "0", "en-US")
                 ),
-            descendingMode = if descending = null then false else descending
+            descendingMode = descending ?? false
         in
             if descendingMode then
                 List.Reverse(ascending)
@@ -2877,7 +2573,6 @@ let
            ])
         ) as list meta [
             Documentation.Name = "IpRangeToCIDR",
-            Documentation.Description = "Converts an IPv4 address range into an aligned CIDR list.",
             Documentation.LongDescription = "Expands the endpoints to the reference's even-first and odd-last boundaries, then returns the smallest aligned CIDR block list covering that normalized range, including /0 for the full address space. The result is a Power Query list of CIDR text; null descending means ascending order, and invalid or reversed normalized ranges raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -2905,15 +2600,16 @@ let
 
     IpRangeToCIDRDoc = Value.ReplaceType(IpRangeToCIDR, IpRangeToCIDRType),
 
-    IpSubnetParseWithAddressValue = (subnet as nullable text) as [Address = text, PrefixLength = number, AddressValue = number] =>
+    IpSubnetParseWithAddressValue = (
+        subnet as nullable text,
+        optional reason as nullable text
+    ) as [Address = text, PrefixLength = number, AddressValue = number, Facts = record] =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpSubnetParse.InvalidInput", message, detail),
+            fail = IpMakeFailure(reason ?? "IpSubnetParse.InvalidInput"),
 
             parsePrefix = (prefixText as text) as number =>
                 let
-                    asciiDigits = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"},
-                    containsOnlyDigits = prefixText <> "" and Text.Select(prefixText, asciiDigits) = prefixText,
+                    containsOnlyDigits = IpIsAsciiDigits(prefixText),
                     prefix =
                         if containsOnlyDigits then
                             Number.FromText(prefixText, "en-US")
@@ -2952,8 +2648,14 @@ let
             spacePosition = Text.PositionOf(checkedSubnet, " "),
             hasSlash = slashPosition >= 0,
             hasSpace = spacePosition >= 0,
+            malformedDelimiterOrder = hasSlash and hasSpace and spacePosition < slashPosition,
             addressText =
-                if hasSlash then
+                if malformedDelimiterOrder then
+                    fail(
+                        "CIDR prefix must immediately follow the IPv4 address.",
+                        [Input = subnet, Component = "delimiter", Expected = "address/prefix or address mask"]
+                    )
+                else if hasSlash then
                     Text.Start(checkedSubnet, slashPosition)
                 else if hasSpace then
                     Text.Start(checkedSubnet, spacePosition)
@@ -2986,9 +2688,10 @@ let
                         ]
                     )
                 else
-                    validatedAddress[Value]
+                    validatedAddress[Value],
+            facts = IpSubnetFacts(addressValue, prefixLength)
         in
-            [Address = addressText, PrefixLength = prefixLength, AddressValue = addressValue],
+            [Address = addressText, PrefixLength = prefixLength, AddressValue = addressValue, Facts = facts],
 
     /*
         Parses an IPv4 address with an optional subnet mask.
@@ -3019,7 +2722,6 @@ let
            ])
         ) as [Address = text, PrefixLength = number] meta [
             Documentation.Name = "IpSubnetParse",
-            Documentation.Description = "Parses an IPv4 address and optional subnet mask.",
             Documentation.LongDescription = "Returns a record with Address and PrefixLength fields. CIDR notation and dotted-decimal mask notation are supported; an address without a mask is treated as /32.",
             Documentation.Examples = {
                 [
@@ -3068,13 +2770,9 @@ let
     */
     IpSubnetToBin = (subnet as nullable text) as number =>
         let
-            parsedSubnet = IpSubnetParse(subnet),
-            addressValue = IpStrToBin(parsedSubnet[Address]),
-            hostBitCount = 32 - parsedSubnet[PrefixLength],
-            blockSize = Number.Power(2, hostBitCount),
-            networkValue = Number.IntegerDivide(addressValue, blockSize) * blockSize
+            parsedSubnet = IpSubnetParseWithAddressValue(subnet)
         in
-            networkValue,
+            parsedSubnet[Facts][NetworkKey],
 
     IpSubnetToBinType =
         type function (
@@ -3084,7 +2782,6 @@ let
            ])
         ) as number meta [
             Documentation.Name = "IpSubnetToBin",
-            Documentation.Description = "Converts an IPv4 subnet to its numeric network address.",
             Documentation.LongDescription = "Returns the IPv4 integer for the subnet's network address in the range 0 through 4294967295. Host bits are cleared according to a CIDR or canonical dotted-decimal mask; an unmasked address is treated as /32. Invalid or null inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -3123,13 +2820,13 @@ let
 
         Best-match mode scans the table in its original order and retains the
         most specific matching prefix. Equal-length matches retain the first
-        row, matching the reference's strict greater-than update. Fast mode
-        buffers the Subnet column for stable indexed access and performs the
-        reference binary search. As in the references, fast mode requires the
-        rows to be sorted by ascending network address and contain no
-        overlapping subnets; that precondition is documented rather than
-        replaced with a full validation scan that would remove the fast mode's
-        performance purpose.
+        row, matching the reference's strict greater-than update. A /0 row is
+        deliberately excluded, aligning this function with the VBA-compatible
+        IpSubnetVLookupAreas baseline. Fast mode validates, then buffers parsed
+        candidates for stable indexed access and binary search. Its rows must
+        be non-empty, sorted by ascending network address, and non-overlapping;
+        invalid fast-mode input raises a structured error instead of returning
+        a potentially incorrect row.
 
         Examples:
             IpSubnetMatchDoc(
@@ -3141,8 +2838,9 @@ let
                 #table(type table [Subnet = text], {{"10.0.0.0/8"}})
             ) = 0
 
-        Null tables, missing Subnet columns, non-text subnet cells, malformed
-        addresses, invalid prefixes, and non-canonical masks raise structured
+        Null or empty Subnet cells are ignored in best-match mode. Null tables,
+        missing Subnet columns, non-text subnet cells, malformed addresses,
+        invalid prefixes, and non-canonical masks raise structured
         validation errors. A null fast value means false.
     */
     IpSubnetMatch = (
@@ -3151,8 +2849,7 @@ let
         optional fast as nullable logical
     ) as number =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpSubnetMatch.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpSubnetMatch.InvalidInput"),
 
             checkedTable =
                 if tableArray = null then
@@ -3170,63 +2867,50 @@ let
                         "Subnet table must contain a Subnet column.",
                         [Input = tableArray, Component = "table", Expected = "Subnet column"]
                     ),
-            fastMode = if fast = null then false else fast,
-            searchSubnet = IpSubnetParse(ip),
-            searchAddressValue = IpStrToBin(searchSubnet[Address]),
+            fastMode = fast ?? false,
+            searchSubnet = IpSubnetParseWithAddressValue(ip),
+            searchAddressValue = searchSubnet[AddressValue],
             searchPrefixLength = searchSubnet[PrefixLength],
+            searchNetworkKey = searchSubnet[Facts][NetworkKey],
 
-            networkKey = (addressValue as number, prefixLength as number) as number =>
-                let
-                    blockSize = Number.Power(2, 32 - prefixLength)
-                in
-                    Number.IntegerDivide(addressValue, blockSize) * blockSize,
-            searchNetworkKey = networkKey(searchAddressValue, searchPrefixLength),
-
-            candidateFromValue = (rawSubnet as any, rowNumber as number) as record =>
-                let
-                    checkedSubnet =
-                        if rawSubnet = null then
-                            fail(
-                                "Subnet table cells cannot be null.",
-                                [Input = rawSubnet, Component = "Subnet", Row = rowNumber, Expected = "IPv4 subnet text"]
-                            )
-                        else if not Value.Is(rawSubnet, type text) then
-                            fail(
-                                "Subnet table cells must contain text.",
-                                [Input = rawSubnet, Component = "Subnet", Row = rowNumber, Expected = "IPv4 subnet text"]
-                            )
-                        else
-                            rawSubnet,
-                    parsedSubnet = IpSubnetParse(checkedSubnet),
-                    addressValue = IpStrToBin(parsedSubnet[Address]),
-                    prefixLength = parsedSubnet[PrefixLength],
-                    blockSize = Number.Power(2, 32 - prefixLength)
-                in
-                    [
-                        Row = rowNumber,
-                        Subnet = checkedSubnet,
-                        PrefixLength = prefixLength,
-                        NetworkKey = Number.IntegerDivide(addressValue, blockSize) * blockSize,
-                        BlockSize = blockSize
-                    ],
+            candidateFromValue = (rawSubnet as any, rowNumber as number) as nullable record =>
+                if rawSubnet = null or (Value.Is(rawSubnet, type text) and rawSubnet = "") then
+                    null
+                else
+                    let
+                        checkedSubnet =
+                            if not Value.Is(rawSubnet, type text) then
+                                fail(
+                                    "Subnet table cells must contain text.",
+                                    [Input = rawSubnet, Component = "Subnet", Row = rowNumber, Expected = "IPv4 subnet text"]
+                                )
+                            else
+                                rawSubnet,
+                        parsedSubnet = IpSubnetParseWithAddressValue(checkedSubnet),
+                        facts = parsedSubnet[Facts]
+                    in
+                        [
+                            Row = rowNumber,
+                            Subnet = checkedSubnet,
+                            PrefixLength = facts[PrefixLength],
+                            NetworkKey = facts[NetworkKey],
+                            BlockSize = facts[BlockSize]
+                        ],
 
             candidateMatches = (candidate as record) as logical =>
                 if searchPrefixLength < candidate[PrefixLength] then
                     false
                 else
-                    Number.IntegerDivide(
-                        searchAddressValue,
-                        candidate[BlockSize]
-                    ) * candidate[BlockSize] = candidate[NetworkKey],
+                    IpSubnetFacts(searchAddressValue, candidate[PrefixLength])[NetworkKey] = candidate[NetworkKey],
 
             bestMatch =
                 List.Accumulate(
                     List.Positions(subnetValues),
-                    [BestPrefix = -1, Row = 0],
+                    [BestPrefix = 0, Row = 0],
                     (state as record, position as number) as record =>
                         let
                             candidate = candidateFromValue(subnetValues{position}, position + 1),
-                            matches = candidateMatches(candidate)
+                            matches = if candidate = null then false else candidateMatches(candidate)
                         in
                             if matches and candidate[PrefixLength] > state[BestPrefix] then
                                 [BestPrefix = candidate[PrefixLength], Row = candidate[Row]]
@@ -3234,12 +2918,56 @@ let
                                 state
                 ),
 
-            bufferedSubnetValues =
+            fastCandidates =
                 if fastMode then
-                    List.Buffer(subnetValues)
+                    List.Buffer(
+                        List.Transform(
+                            List.Positions(subnetValues),
+                            (position as number) as record =>
+                                let
+                                    candidate = candidateFromValue(subnetValues{position}, position + 1)
+                                in
+                                    if candidate = null then
+                                        fail(
+                                            "Fast mode requires non-empty Subnet cells.",
+                                            [Input = subnetValues{position}, Component = "Subnet", Row = position + 1, Expected = "sorted non-empty IPv4 subnet text"]
+                                        )
+                                    else
+                                        candidate
+                        )
+                    )
                 else
-                    subnetValues,
-            rowCount = List.Count(bufferedSubnetValues),
+                    {},
+            fastPrecondition =
+                if not fastMode then
+                    true
+                else
+                    List.Accumulate(
+                        fastCandidates,
+                        [Previous = null, Valid = true],
+                        (state as record, candidate as record) as record =>
+                            let
+                                previous = state[Previous],
+                                orderedAndDisjoint =
+                                    if previous = null then
+                                        true
+                                    else
+                                        previous[NetworkKey] + previous[BlockSize] <= candidate[NetworkKey]
+                            in
+                                if state[Valid] and orderedAndDisjoint then
+                                    [Previous = candidate, Valid = true]
+                                else
+                                    [Previous = candidate, Valid = false]
+                    )[Valid],
+            validatedFastCandidates =
+                if fastPrecondition then
+                    fastCandidates
+                else
+                    fail(
+                        "Fast mode requires subnets sorted by network address without overlaps.",
+                        [Input = tableArray, Component = "Subnet", Expected = "ascending, non-overlapping, non-empty IPv4 subnet rows"]
+                    ),
+            rowCount = List.Count(validatedFastCandidates),
             fastMatch =
                 if rowCount = 0 then
                     0
@@ -3247,14 +2975,11 @@ let
                     let
                         binarySearch = (low as number, high as number) as record =>
                             if low >= high then
-                                let
-                                    candidate = candidateFromValue(bufferedSubnetValues{low}, low + 1)
-                                in
-                                    [Index = low, Candidate = candidate]
+                                [Index = low, Candidate = validatedFastCandidates{low}]
                             else
                                 let
                                     midpoint = Number.IntegerDivide(low + high + 1, 2),
-                                    candidate = candidateFromValue(bufferedSubnetValues{midpoint}, midpoint + 1)
+                                    candidate = validatedFastCandidates{midpoint}
                                 in
                                     if searchNetworkKey < candidate[NetworkKey] then
                                         @binarySearch(low, midpoint - 1)
@@ -3263,7 +2988,7 @@ let
                         selected = binarySearch(0, rowCount - 1),
                         selectedCandidate = selected[Candidate]
                     in
-                        if candidateMatches(selectedCandidate) then
+                        if selectedCandidate[PrefixLength] > 0 and candidateMatches(selectedCandidate) then
                             selectedCandidate[Row]
                         else
                             0
@@ -3289,8 +3014,7 @@ let
            ])
         ) as number meta [
             Documentation.Name = "IpSubnetMatch",
-            Documentation.Description = "Returns the 1-based row of the best matching IPv4 subnet.",
-            Documentation.LongDescription = "Searches the required Subnet column of a Power Query table. Best-match mode accepts any row order and returns the most specific matching subnet; fast mode uses binary search and requires ascending, non-overlapping subnet rows. Returns 0 when no subnet matches. Null or malformed inputs and invalid table cells raise structured validation errors.",
+            Documentation.LongDescription = "Searches the required Subnet column of a Power Query table. Best-match mode accepts any row order, ignores null or empty Subnet cells, and returns the most specific matching subnet; fast mode uses binary search and requires ascending, non-overlapping, non-empty subnet rows. Returns 0 when no subnet matches. Null or malformed inputs and other invalid table cells raise structured validation errors.",
             Documentation.Examples = {
                 [
                     Description = "Return the most specific matching row using best-match mode.",
@@ -3358,8 +3082,7 @@ let
         optional fast as nullable logical
     ) as nullable text =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpSubnetJoin.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpSubnetJoin.InvalidInput"),
 
             checkedTable =
                 if tableArray = null then
@@ -3384,11 +3107,11 @@ let
                 else
                     fail(
                         "Subnet table must contain Subnet and the selected result column.",
-                        [Input = tableArray, Component = "table", Expected = {"Subnet", checkedResultColumn}]
+                        [Input = tableArray, Component = "table", Expected = "Subnet and " & checkedResultColumn & " columns"]
                     ),
-            resultValues =
-                Table.Column(validatedTable, checkedResultColumn),
-            matchedRow = IpSubnetMatch(ip, validatedTable, fast)
+            bufferedTable = Table.Buffer(validatedTable),
+            resultValues = Table.Column(bufferedTable, checkedResultColumn),
+            matchedRow = IpSubnetMatch(ip, bufferedTable, fast)
         in
             if matchedRow = 0 then
                 null
@@ -3415,13 +3138,12 @@ let
            ])
         ) as nullable text meta [
             Documentation.Name = "IpSubnetJoin",
-            Documentation.Description = "Projects a value from the most-specific matching IPv4 subnet row.",
             Documentation.LongDescription = "Matches an IPv4 address or subnet against a Power Query table's Subnet column and returns the selected result-column value from the most-specific containing subnet. Best-match mode accepts arbitrary row order; fast mode uses binary search and requires ascending, non-overlapping rows. No match returns null rather than the VBA sentinel Not Found, and a matched row whose result-column value is itself null also returns null; these two cases are not distinguished. Call IpSubnetMatch directly to tell them apart. Matched values are converted to text to preserve the reference String boundary.",
             Documentation.Examples = {
                 [
                     Description = "Return the value from the most-specific matching subnet.",
                     Code = "IpSubnetJoin(\"10.1.2.3\", #table(type table [Subnet = text, Name = text], {{\"10.0.0.0/8\", \"wide\"}, {\"10.1.0.0/16\", \"narrow\"}}), \"Name\")",
-                    Result = "narrow"
+                    Result = "\"narrow\""
                 ],
                 [
                     Description = "Return null when no subnet contains the search value.",
@@ -3431,7 +3153,7 @@ let
                 [
                     Description = "Use fast mode with sorted, non-overlapping subnet rows.",
                     Code = "IpSubnetJoin(\"10.1.2.3\", #table(type table [Subnet = text, Name = text], {{\"10.0.0.0/16\", \"wide\"}, {\"10.1.0.0/16\", \"narrow\"}}), \"Name\", true)",
-                    Result = "narrow"
+                    Result = "\"narrow\""
                 ]
             }
         ],
@@ -3474,7 +3196,6 @@ let
            ])
         ) as text meta [
             Documentation.Name = "IpWithoutMask",
-            Documentation.Description = "Removes an optional IPv4 subnet mask.",
             Documentation.LongDescription = "Returns the validated dotted-decimal IPv4 address before an optional CIDR or dotted-decimal mask. Host bits are preserved; unlike the JavaScript IpNet implementation, this function does not normalize the address to a network boundary. Invalid or null inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -3528,24 +3249,10 @@ let
     */
     IpClearHostBits = (subnet as nullable text) as text =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpClearHostBits.InvalidInput", message, detail),
-
-            checkedSubnet =
-                if subnet = null then
-                    fail(
-                        "IPv4 subnet cannot be null.",
-                        [Input = subnet, Component = "subnet", Expected = "IPv4 subnet text"]
-                    )
-                else
-                    subnet,
-            parsedSubnet = IpSubnetParse(checkedSubnet),
-            addressValue = IpStrToBin(parsedSubnet[Address]),
-            prefixLength = parsedSubnet[PrefixLength],
-            blockSize = Number.Power(2, 32 - prefixLength),
-            networkValue = Number.IntegerDivide(addressValue, blockSize) * blockSize,
-            slashPosition = Text.PositionOf(checkedSubnet, "/"),
-            spacePosition = Text.PositionOf(checkedSubnet, " "),
+            parsedSubnet = IpSubnetParseWithAddressValue(subnet),
+            networkValue = parsedSubnet[Facts][NetworkKey],
+            slashPosition = Text.PositionOf(subnet, "/"),
+            spacePosition = Text.PositionOf(subnet, " "),
             suffixPosition =
                 if slashPosition >= 0 then
                     slashPosition
@@ -3555,7 +3262,7 @@ let
                 if suffixPosition < 0 then
                     ""
                 else
-                    Text.Range(checkedSubnet, suffixPosition)
+                    Text.Range(subnet, suffixPosition)
         in
             IpBinToStr(networkValue) & suffix,
 
@@ -3567,7 +3274,6 @@ let
            ])
         ) as text meta [
             Documentation.Name = "IpClearHostBits",
-            Documentation.Description = "Clears host bits from an IPv4 subnet while preserving its mask suffix.",
             Documentation.LongDescription = "Returns the network-boundary IPv4 address with the original CIDR or dotted-mask suffix text preserved. Unmasked addresses remain unmasked; null, malformed, invalid-prefix, and non-canonical-mask inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -3629,7 +3335,6 @@ let
            ])
         ) as logical meta [
             Documentation.Name = "IpIsInSubnet",
-            Documentation.Description = "Tests whether an IPv4 address is contained by a subnet.",
             Documentation.LongDescription = "Returns true when the validated IPv4 address shares the subnet's prefix. Accepts CIDR, dotted-decimal mask, and unmasked subnet notation; an unmasked subnet is treated as /32. Invalid inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -3705,7 +3410,6 @@ let
            ])
         ) as logical meta [
             Documentation.Name = "IpSubnetIsInSubnet",
-            Documentation.Description = "Tests whether one IPv4 subnet is contained by another.",
             Documentation.LongDescription = "Returns true when the candidate subnet has at least as many prefix bits as the containing subnet and its address shares the containing subnet's prefix. Accepts CIDR, dotted-decimal mask, and unmasked IPv4 notation. Invalid inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -3766,7 +3470,6 @@ let
            ])
         ) as number meta [
             Documentation.Name = "IpSubnetLen",
-            Documentation.Description = "Returns the prefix length from an IPv4 subnet expression.",
             Documentation.LongDescription = "Accepts a dotted IPv4 address, CIDR notation, or dotted-decimal mask notation and returns a prefix length from 0 through 32. An unmasked address is treated as /32; null, malformed addresses, invalid prefixes, and non-canonical masks raise structured validation errors.",
             Documentation.Examples = {
                 [
@@ -3801,7 +3504,9 @@ let
         Grouping makes same-next-hop containment transitive; this deliberately
         preserves the documented semantic result rather than an
         order-sensitive nested route that the mutable reverse scan can leave
-        behind after unrelated routes are removed.
+        behind after unrelated routes are removed. Each sorted group is folded
+        once onto an immutable linked stack; merge collapse recurses through at
+        most the 32 IPv4 prefix levels instead of rebuilding the whole list.
 
         The Power Query contract replaces the Excel single-column Range with a
         nullable list of route text. IpParseRoute supplies the subnet and
@@ -3829,8 +3534,7 @@ let
         optional descending as nullable logical
     ) as list =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpRouteAggregateArray.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpRouteAggregateArray.InvalidInput"),
 
             checkedRoutes =
                 if routes = null then
@@ -3847,7 +3551,7 @@ let
                         if rawRoute = null then
                             false
                         else if Value.Is(rawRoute, type text) then
-                            rawRoute <> ""
+                            Text.Trim(rawRoute) <> ""
                         else
                             true
                 ),
@@ -3865,21 +3569,18 @@ let
                             rawRoute,
                     parsedRoute = IpParseRoute(checkedRoute),
                     subnetText = parsedRoute[Subnet],
-                    parsedSubnet = IpSubnetParse(subnetText),
-                    addressValue = IpStrToBin(parsedSubnet[Address]),
-                    prefixLength = parsedSubnet[PrefixLength],
-                    blockSize = Number.Power(2, 32 - prefixLength),
-                    networkKey = Number.IntegerDivide(addressValue, blockSize) * blockSize,
+                    parsedSubnet = IpSubnetParseWithAddressValue(subnetText),
+                    facts = parsedSubnet[Facts],
                     usesCidr =
                         Text.PositionOf(subnetText, "/") >= 0
                             or Text.PositionOf(subnetText, " ") < 0
                 in
                     [
-                        NetworkKey = networkKey,
-                        PrefixLength = prefixLength,
+                        NetworkKey = facts[NetworkKey],
+                        PrefixLength = facts[PrefixLength],
                         UsesCidr = usesCidr,
                         NextHop = parsedRoute[NextHop],
-                        OriginalIndex = originalIndex
+                        FilteredIndex = originalIndex
                     ],
 
             routeRecords =
@@ -3897,20 +3598,16 @@ let
                     -1
                 else if left[PrefixLength] > right[PrefixLength] then
                     1
-                else if left[OriginalIndex] < right[OriginalIndex] then
+                else if left[FilteredIndex] < right[FilteredIndex] then
                     -1
-                else if left[OriginalIndex] > right[OriginalIndex] then
+                else if left[FilteredIndex] > right[FilteredIndex] then
                     1
                 else
                     0,
 
             containsRoute = (outer as record, inner as record) as logical =>
-                let
-                    outerBlockSize = Number.Power(2, 32 - outer[PrefixLength]),
-                    innerNetworkAtOuter = Number.IntegerDivide(inner[NetworkKey], outerBlockSize) * outerBlockSize
-                in
-                    inner[PrefixLength] >= outer[PrefixLength]
-                        and innerNetworkAtOuter = outer[NetworkKey],
+                inner[PrefixLength] >= outer[PrefixLength]
+                    and IpSubnetFacts(inner[NetworkKey], outer[PrefixLength])[NetworkKey] = outer[NetworkKey],
 
             joinedRoute = (left as record, right as record) as nullable record =>
                 if left[PrefixLength] <> right[PrefixLength] or left[PrefixLength] = 0 then
@@ -3918,50 +3615,59 @@ let
                 else
                     let
                         parentPrefixLength = left[PrefixLength] - 1,
-                        parentBlockSize = Number.Power(2, 32 - parentPrefixLength),
-                        parentNetworkKey = Number.IntegerDivide(left[NetworkKey], parentBlockSize) * parentBlockSize,
-                        rightNetworkAtParent = Number.IntegerDivide(right[NetworkKey], parentBlockSize) * parentBlockSize
+                        leftParentFacts = IpSubnetFacts(left[NetworkKey], parentPrefixLength),
+                        rightParentFacts = IpSubnetFacts(right[NetworkKey], parentPrefixLength)
                     in
-                        if parentNetworkKey = rightNetworkAtParent then
+                        if leftParentFacts[NetworkKey] = rightParentFacts[NetworkKey] then
                             [
-                                NetworkKey = parentNetworkKey,
+                                NetworkKey = leftParentFacts[NetworkKey],
                                 PrefixLength = parentPrefixLength,
                                 UsesCidr = left[UsesCidr],
                                 NextHop = left[NextHop],
-                                OriginalIndex = left[OriginalIndex]
+                                FilteredIndex = left[FilteredIndex]
                             ]
                         else
                             null,
 
-            aggregateGroup = (items as list, position as number) as list =>
-                if List.Count(items) < 2 or position >= List.Count(items) - 1 then
-                    items
+            pushAggregate = (stack as nullable record, route as record) as record =>
+                if stack = null then
+                    [Value = route, Rest = null]
                 else
                     let
-                        left = items{position},
-                        right = items{position + 1},
-                        containsRight = containsRoute(left, right),
-                        merged =
-                            if containsRight then
-                                null
-                            else
-                                joinedRoute(left, right)
+                        previous = stack[Value],
+                        containsCurrent = containsRoute(previous, route),
+                        merged = if containsCurrent then null else joinedRoute(previous, route)
                     in
-                        if containsRight then
-                            @aggregateGroup(List.RemoveRange(items, position + 1, 1), position)
+                        if containsCurrent then
+                            stack
                         else if merged <> null then
-                            @aggregateGroup(
-                                List.ReplaceRange(items, position, 2, {merged}),
-                                if position > 0 then position - 1 else 0
-                            )
+                            @pushAggregate(stack[Rest], merged)
                         else
-                            @aggregateGroup(items, position + 1),
+                            [Value = route, Rest = stack],
+
+            aggregateGroup = (items as list) as list =>
+                let
+                    stack =
+                        List.Accumulate(
+                            items,
+                            null,
+                            (state as nullable record, route as record) => pushAggregate(state, route)
+                        ),
+                    reverseResult =
+                        List.Generate(
+                            () => stack,
+                            each _ <> null,
+                            each _[Rest],
+                            each _[Value]
+                        )
+                in
+                    List.Reverse(reverseResult),
 
             renderRoute = (route as record) as text =>
                 let
-                    networkText = IpBinToStr(route[NetworkKey]),
-                    blockSize = Number.Power(2, 32 - route[PrefixLength]),
-                    maskValue = (Number.Power(2, route[PrefixLength]) - 1) * blockSize,
+                    facts = IpSubnetFacts(route[NetworkKey], route[PrefixLength]),
+                    networkText = IpBinToStr(facts[NetworkKey]),
+                    maskValue = (Number.Power(2, route[PrefixLength]) - 1) * facts[BlockSize],
                     subnetText =
                         if route[UsesCidr] then
                             networkText & "/" & Number.ToText(route[PrefixLength], "0", "en-US")
@@ -3984,7 +3690,7 @@ let
                         ),
                     sortedGroup = List.Sort(group, compareRoutes)
                 in
-                    aggregateGroup(sortedGroup, 0),
+                    aggregateGroup(sortedGroup),
             aggregatedRoutes =
                 List.Accumulate(
                     nextHops,
@@ -3993,7 +3699,7 @@ let
                 ),
             sortedAggregatedRoutes = List.Sort(aggregatedRoutes, compareRoutes),
             ascendingResult = List.Transform(sortedAggregatedRoutes, renderRoute),
-            descendingMode = if descending = null then false else descending
+            descendingMode = descending ?? false
         in
             if descendingMode then
                 List.Reverse(ascendingResult)
@@ -4012,7 +3718,6 @@ let
            ])
         ) as list meta [
             Documentation.Name = "IpRouteAggregateArray",
-            Documentation.Description = "Sorts and summarizes IPv4 routes by next hop.",
             Documentation.LongDescription = "Normalizes, sorts, deduplicates, removes contained routes, and joins aligned equal-size routes only within the same exact next-hop group. Returns a Power Query list of route text, preserves CIDR versus dotted-mask notation from the first route that survives each merge, rejects a null route list with a structured validation error, ignores null and empty items, rejects non-text or malformed routes, and treats null descending as ascending order.",
             Documentation.Examples = {
                 [
@@ -4074,10 +3779,9 @@ let
         optional descending as nullable logical
     ) as list =>
         let
-            fail = (message as text, detail as record) as none =>
-                error Error.Record("IpDivideSubnet.InvalidInput", message, detail),
+            fail = IpMakeFailure("IpDivideSubnet.InvalidInput"),
 
-            parsedSubnet = IpSubnetParse(subnet),
+            parsedSubnet = IpSubnetParseWithAddressValue(subnet),
             prefixLength = parsedSubnet[PrefixLength],
             checkedOffset =
                 if offset = null then
@@ -4108,12 +3812,12 @@ let
                     )
                 else
                     targetPrefixLength,
-            addressValue = IpStrToBin(parsedSubnet[Address]),
-            parentBlockSize = Number.Power(2, 32 - prefixLength),
-            networkValue = Number.IntegerDivide(addressValue, parentBlockSize) * parentBlockSize,
-            childBlockSize = Number.Power(2, 32 - checkedTargetPrefixLength),
+            parentFacts = parsedSubnet[Facts],
+            childFacts = IpSubnetFacts(parentFacts[NetworkKey], checkedTargetPrefixLength),
+            networkValue = parentFacts[NetworkKey],
+            childBlockSize = childFacts[BlockSize],
             childCount = Number.Power(2, checkedOffset),
-            descendingMode = if descending = null then false else descending,
+            descendingMode = descending ?? false,
             childIndexes =
                 if descendingMode then
                     List.Numbers(childCount - 1, childCount, -1)
@@ -4144,7 +3848,6 @@ let
            ])
         ) as list meta [
             Documentation.Name = "IpDivideSubnet",
-            Documentation.Description = "Divides an IPv4 subnet into equal-sized child subnets.",
             Documentation.LongDescription = "Returns a Power Query list of canonical CIDR child subnets after clearing host bits from the input network. The offset adds prefix bits, so the list contains 2^offset children; callers can select one with zero-based list indexing. Null, malformed, non-integral, negative, and too-large offsets raise structured validation errors, and null descending means ascending output.",
             Documentation.Examples = {
                 [
@@ -4199,7 +3902,6 @@ let
            ])
         ) as number meta [
             Documentation.Name = "IpSubnetSize",
-            Documentation.Description = "Returns the number of IPv4 addresses in a subnet.",
             Documentation.LongDescription = "Returns 2^(32 - prefix length) for a validated IPv4 subnet. CIDR, dotted-decimal mask, and unmasked address notation are supported; unmasked addresses are treated as /32. Null, malformed, invalid-prefix, and non-canonical-mask inputs raise structured validation errors.",
             Documentation.Examples = {
                 [
